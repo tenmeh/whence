@@ -15,6 +15,19 @@ one, or a data frame with one row and one column.}
 \value{
 A \code{whence_trace} object. Use \code{\link[=whence_value]{whence_value()}}, \code{\link[=whence_code]{whence_code()}},
 \code{\link[=whence_rows]{whence_rows()}}, \code{as.data.frame()} and \code{print()} with it.
+
+The object is a list. These fields are stable, and you can read them:
+\itemize{
+\item \code{value}: the value, as \code{\link[=whence_value]{whence_value()}} gives it.
+\item \code{code}: the reproduce code, as \code{\link[=whence_code]{whence_code()}} gives it.
+\item \code{traced}: \code{TRUE} when the pipeline was split into steps.
+\item \code{stages}: a data frame with one row for each step, as
+\code{as.data.frame()} gives it.
+\item \code{reason}: why the chain stopped short, as one sentence, or \code{NULL} when
+every step was traced.
+}
+
+Do not rely on the other fields. They can change in any version.
 }
 \description{
 \code{whence_trace()} takes a pipeline that ends in a single value, and runs it
@@ -47,6 +60,16 @@ show.
 \item The native-pipe placeholder \verb{_} is not supported. A pipeline that uses
 it is not split, and the value is still given.
 }
+}
+
+\section{Known verbs}{
+These calls are steps: \code{filter()}, \code{mutate()}, \code{transmute()}, \code{select()},
+\code{rename()}, \code{arrange()}, \code{slice()}, \code{slice_head()}, \code{slice_tail()},
+\code{slice_min()}, \code{slice_max()}, \code{slice_sample()}, \code{group_by()}, \code{ungroup()},
+\code{summarise()}, \code{summarize()}, \code{count()}, \code{tally()}, \code{distinct()},
+\code{drop_na()}, \code{pivot_longer()}, \code{pivot_wider()}, \code{pull()}, \code{head()} and
+\code{tail()}, with or without a namespace such as \verb{dplyr::}. Any other call
+ends the chain, and the trace says where in its \code{reason}.
 }
 
 \examples{

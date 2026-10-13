@@ -29,12 +29,34 @@
 #' * The native-pipe placeholder `_` is not supported. A pipeline that uses
 #'   it is not split, and the value is still given.
 #'
+#' # Known verbs
+#'
+#' These calls are steps: `filter()`, `mutate()`, `transmute()`, `select()`,
+#' `rename()`, `arrange()`, `slice()`, `slice_head()`, `slice_tail()`,
+#' `slice_min()`, `slice_max()`, `slice_sample()`, `group_by()`, `ungroup()`,
+#' `summarise()`, `summarize()`, `count()`, `tally()`, `distinct()`,
+#' `drop_na()`, `pivot_longer()`, `pivot_wider()`, `pull()`, `head()` and
+#' `tail()`, with or without a namespace such as `dplyr::`. Any other call
+#' ends the chain, and the trace says where in its `reason`.
+#'
 #' @param expr A pipeline that ends in a single value: a vector of length
 #'   one, or a data frame with one row and one column.
 #' @param env The environment in which to evaluate `expr`.
 #'
 #' @return A `whence_trace` object. Use [whence_value()], [whence_code()],
 #'   [whence_rows()], `as.data.frame()` and `print()` with it.
+#'
+#'   The object is a list. These fields are stable, and you can read them:
+#'
+#'   * `value`: the value, as [whence_value()] gives it.
+#'   * `code`: the reproduce code, as [whence_code()] gives it.
+#'   * `traced`: `TRUE` when the pipeline was split into steps.
+#'   * `stages`: a data frame with one row for each step, as
+#'     `as.data.frame()` gives it.
+#'   * `reason`: why the chain stopped short, as one sentence, or `NULL` when
+#'     every step was traced.
+#'
+#'   Do not rely on the other fields. They can change in any version.
 #' @examplesIf requireNamespace("dplyr", quietly = TRUE)
 #' library(dplyr, warn.conflicts = FALSE)
 #'
@@ -104,6 +126,7 @@ trace_expr <- function(expr, env) {
       stages = bind_records(records),
       code = build_code(parts$source, parts$stages, env, seed),
       traced = is.data.frame(source_data) && length(parts$stages) > 0,
+      reason = trace_reason(parts$source, length(parts$stages), source_data),
       expr = expr,
       source = parts$source,
       stage_list = parts$stages,
@@ -113,6 +136,48 @@ trace_expr <- function(expr, env) {
     ),
     class = "whence_trace"
   )
+}
+
+
+#' Why the chain stopped short, as one sentence, or `NULL`
+#' @noRd
+trace_reason <- function(source, n_stages, source_data) {
+  stop_at <- stop_point(source)
+  if (n_stages > 0 && is.data.frame(source_data)) {
+    if (is.null(stop_at)) {
+      return(NULL)
+    }
+    return(paste0(
+      "Steps before ", stop_at, "() are not shown, because whence does not know ",
+      stop_at, "()."
+    ))
+  }
+  if (!is.null(stop_at)) {
+    return(paste0("Not traced: the chain stops at ", stop_at, "(), which whence does not know."))
+  }
+  if (n_stages > 0) {
+    return("Not traced: the source is not a data frame.")
+  }
+  "Not traced: the pipeline has no step that whence knows."
+}
+
+
+#' The name of the call where the chain stopped, or `NULL`
+#'
+#' The chain stopped at a call that is not a known verb. When that call has
+#' a pipeline of known verbs as its first argument, the user wrote more steps
+#' than whence could follow, so the call is named.
+#' @noRd
+stop_point <- function(source) {
+  if (!is.call(source) || length(source) < 2 || is_magrittr_pipe(source)) {
+    return(NULL)
+  }
+  name <- safe_call_name(source)
+  if (is.null(name) || name %in% whence_verbs) {
+    return(NULL)
+  }
+  first <- source[[2]]
+  if (is_verb_call(first) || is_magrittr_pipe(first)) name else NULL
 }
 
 

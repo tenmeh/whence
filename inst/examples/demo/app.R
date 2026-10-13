@@ -45,7 +45,7 @@ ui <- fluidPage(
     ),
     mainPanel(
       tags$p("Click a number to see where it came from."),
-      tags$h3(explainableOutput("revenue", label = "Revenue", format = dollars)),
+      tags$h3(explainableOutput("revenue", label = "Revenue")),
       tags$h3(explainableOutput("orders", label = "Orders")),
       tags$h3(explainableOutput("top_share", label = "Share of the top customer (%)")),
       tags$h3(explainableOutput("customers", label = "Customers"))
@@ -60,7 +60,8 @@ server <- function(input, output, session) {
       filter(region == input$region) |>
       filter(year >= input$from) |>
       filter(channel %in% input$channel) |>
-      summarise(total = sum(revenue))
+      summarise(total = sum(revenue)),
+    format = dollars
   )
 
   output$orders <- renderExplainable(

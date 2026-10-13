@@ -14,15 +14,20 @@ test_that("explainableOutput() gives the output element with its dependency", {
 test_that("explainableOutput() checks its arguments", {
   expect_error(explainableOutput(1), "`outputId` must be")
   expect_error(explainableOutput("x", label = 1), "`label` must be")
-  expect_error(explainableOutput("x", format = "%.2f"), "`format` must be")
 })
 
-test_that("explainableOutput() records format, and NULL removes it", {
-  explainableOutput("registry-test", format = toupper)
-  expect_identical(format_registry[["registry-test"]], toupper)
+test_that("renderExplainable() checks its arguments", {
+  expect_error(renderExplainable(1, format = "%.2f"), "`format` must be a function or `NULL`, not character")
+  expect_error(renderExplainable(1, env = list()), "`env` must be an environment, not list")
+  expect_error(renderExplainable(quote(1), quoted = "yes"), "`quoted` must be `TRUE` or `FALSE`")
+  expect_error(renderExplainable(1, outputArgs = "label"), "`outputArgs` must be a list")
+})
 
-  explainableOutput("registry-test")
-  expect_null(format_registry[["registry-test"]])
+test_that("renderExplainable() passes outputArgs to the output function", {
+  render <- renderExplainable(1, outputArgs = list(label = "Total"))
+
+  expect_identical(attr(render, "outputArgs"), list(label = "Total"))
+  expect_identical(attr(render, "outputFunc"), explainableOutput)
 })
 
 # --- The payload ---------------------------------------------------------------
@@ -90,6 +95,44 @@ test_that("renderExplainable() reads inputs and updates when they change", {
 
     session$setInputs(region = "EMEA")
     expect_identical(output$total$value, "15,500")
+  })
+})
+
+test_that("format runs on the server, and can read inputs", {
+  local_dplyr()
+  sales <- make_sales()
+  currency <- function(x) paste(input_symbol(), format(x, big.mark = ","))
+  input_symbol <- NULL
+
+  server <- function(input, output, session) {
+    input_symbol <<- function() input$symbol
+    output$total <- renderExplainable(
+      sales |> summarise(total = sum(revenue)),
+      format = currency
+    )
+  }
+
+  shiny::testServer(server, {
+    session$setInputs(symbol = "EUR")
+    expect_identical(output$total$value, "EUR 21,000")
+    expect_identical(output$total$raw, 21000)
+  })
+})
+
+test_that("two renders with the same output id keep their own format", {
+  local_dplyr()
+  sales <- make_sales()
+  make_server <- function(fmt) {
+    function(input, output, session) {
+      output$total <- renderExplainable(sales |> summarise(n = n()), format = fmt)
+    }
+  }
+
+  shiny::testServer(make_server(function(x) paste(x, "rows")), {
+    expect_identical(output$total$value, "20 rows")
+  })
+  shiny::testServer(make_server(NULL), {
+    expect_identical(output$total$value, "20")
   })
 })
 
@@ -230,6 +273,22 @@ test_that("View the rows fires the input and fills the table", {
   if (requireNamespace("reactable", quietly = TRUE)) {
     expect_identical(js(app, "document.querySelector('.whence-rows-content .ReactTable') !== null"), TRUE)
   }
+  expect_no_shiny_errors(app)
+})
+
+test_that("after a join the panel says where the chain stopped", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "joined")
+  wait_for_output(app, "joined")
+
+  app$click(selector = "#joined .whence-value")
+  app$wait_for_js(panel_open)
+
+  expect_identical(
+    js(app, "document.querySelector('.whence-panel .whence-untraced').textContent"),
+    "Steps before inner_join() are not shown, because whence does not know inner_join()."
+  )
   expect_no_shiny_errors(app)
 })
 

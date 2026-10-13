@@ -65,11 +65,7 @@ library(whence)
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
-  explainableOutput(
-    "total",
-    label = "Revenue",
-    format = function(x) paste0("$", format(x, big.mark = ","))
-  )
+  explainableOutput("total", label = "Revenue")
 )
 
 server <- function(input, output, session) {
@@ -77,10 +73,14 @@ server <- function(input, output, session) {
     sales |>
       filter(region == input$region) |>
       filter(year >= 2023) |>
-      summarise(total = sum(revenue))
+      summarise(total = sum(revenue)),
+    format = scales::label_dollar()
   )
 }
 ```
+
+`format` turns the value into the text to show. Any function works, and so
+does a formatter of 'scales'. It runs on the server, so it can read inputs.
 
 The viewer clicks the value, or presses Enter on it, and a panel opens. The
 panel holds the waterfall and the code. It opens with no trip to the server.

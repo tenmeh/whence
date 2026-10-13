@@ -10,17 +10,13 @@ sales <- data.frame(
   revenue = seq(100, 2000, by = 100),
   stringsAsFactors = FALSE
 )
+managers <- data.frame(region = c("APAC", "EMEA"), manager = c("Kim", "Lou"))
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
-  tags$p(
-    explainableOutput(
-      "total",
-      label = "Total revenue",
-      format = function(x) paste0("$", format(x, big.mark = ","))
-    )
-  ),
+  tags$p(explainableOutput("total", label = "Total revenue")),
   tags$p(explainableOutput("customers", label = "Customers")),
+  tags$p(explainableOutput("joined", label = "Joined")),
   tags$button(id = "after", type = "button", "A control after the outputs")
 )
 
@@ -29,12 +25,20 @@ server <- function(input, output, session) {
     sales |>
       filter(region == input$region) |>
       filter(year >= 2023) |>
-      summarise(total = sum(revenue))
+      summarise(total = sum(revenue)),
+    format = function(x) paste0("$", format(x, big.mark = ","))
   )
   output$customers <- renderExplainable(
     sales |>
       filter(region == input$region) |>
       distinct(customer) |>
+      summarise(n = n())
+  )
+  # A join ends the chain, so the panel says where it stopped.
+  output$joined <- renderExplainable(
+    sales |>
+      filter(region == input$region) |>
+      inner_join(managers, by = "region") |>
       summarise(n = n())
   )
 }
