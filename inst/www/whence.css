@@ -1,5 +1,5 @@
 /* =============================================================================
-   whence.css - the value and the panel of explainableOutput()
+   whence.css - the value and the panel of whenceOutput()
    The colours come from currentColor and the variables of the Bootstrap
    theme. Each variable has a fallback for a page with no Bootstrap 5.
    ============================================================================= */
@@ -204,6 +204,88 @@
 .whence-rows-table {
   max-height: 20em;
   overflow: auto;
+}
+
+/* --- A removed count that shows its rows ----------------------------------- */
+.whence-delta-button {
+  padding: 0;
+  font: inherit;
+  color: var(--whence-removed);
+  background: none;
+  border: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.whence-delta-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.whence-loading,
+.whence-row-text {
+  margin: 0.25em 0;
+  color: var(--whence-muted);
+}
+
+/* --- Tables and plots ------------------------------------------------------- */
+.whence-table-output,
+.whence-table-output .whence-slot,
+.whence-plot {
+  display: block;
+}
+
+.whence-table-wrap {
+  max-height: 32em;
+  overflow: auto;
+}
+
+.whence-table {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.whence-table th[scope="row"] {
+  font-weight: normal;
+}
+
+.whence-table-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5em 1em;
+  margin-top: 0.25em;
+  font-size: 0.875em;
+}
+
+.whence-table-note {
+  color: var(--whence-muted);
+}
+
+.whence-table-explain {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.whence-plot img {
+  cursor: pointer;
+}
+
+.whence-plot-data {
+  margin-top: 0.5em;
+}
+
+.whence-plot-data > summary {
+  cursor: pointer;
+  font-size: 0.875em;
 }
 
 /* --- Responsive overrides --------------------------------------------------- */

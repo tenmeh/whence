@@ -46,7 +46,7 @@ as.data.frame.whence_trace <- function(x, ...) {
 
 #' @export
 format.whence_trace <- function(x, ...) {
-  value <- format_value(x$value)
+  value <- if (is.data.frame(x$value)) "" else format_value(x$value)
   stages <- x$stages[x$stages$shown, , drop = FALSE]
 
   lines <- c(
@@ -60,11 +60,14 @@ format.whence_trace <- function(x, ...) {
   } else {
     n_text <- format_count(stages$n)
     n_text[is.na(n_text)] <- ""
-    delta_text <- vapply(
-      stages$delta,
-      function(d) if (is.na(d) || d == 0) "" else paste(format_signed(d), "rows"),
-      ""
-    )
+    pct <- format_percent(stages$percent)
+    delta_text <- vapply(seq_along(stages$delta), function(i) {
+      d <- stages$delta[[i]]
+      if (is.na(d) || d == 0) {
+        return("")
+      }
+      paste0(format_signed(d), " rows", if (nzchar(pct[[i]])) paste0(" (", pct[[i]], ")") else "")
+    }, "")
     label <- ifelse(stages$kind == "source", stages$label, paste("->", stages$label))
     width_label <- max(nchar(label))
     width_n <- max(nchar(n_text))

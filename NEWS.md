@@ -2,10 +2,10 @@
 
 * First version.
 
-* `explainableOutput()` and `renderExplainable()` show a value in 'shiny'.
+* `whenceOutput()` and `renderWhence()` show a value in 'shiny'.
   A click on the value opens a panel with the attrition waterfall and the
   reproduce code, with no trip to the server. `format` in
-  `renderExplainable()` turns the value into text, and a formatter of
+  `renderWhence()` turns the value into text, and a formatter of
   'scales' works there.
 
 * `whence_code()` gives code that makes the value again. Only `input$name`

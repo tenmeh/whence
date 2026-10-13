@@ -54,8 +54,8 @@ pak::pak("tenmeh/whence")
 
 ## Usage
 
-Replace `textOutput()` and `renderText()` with `explainableOutput()` and
-`renderExplainable()`. Give the render a pipeline that ends in one value.
+Replace `textOutput()` and `renderText()` with `whenceOutput()` and
+`renderWhence()`. Give the render a pipeline that ends in one value.
 You do not need to rewrite it.
 
 ```r
@@ -65,11 +65,11 @@ library(whence)
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
-  explainableOutput("total", label = "Revenue")
+  whenceOutput("total", label = "Revenue")
 )
 
 server <- function(input, output, session) {
-  output$total <- renderExplainable(
+  output$total <- renderWhence(
     sales |>
       filter(region == input$region) |>
       filter(year >= 2023) |>

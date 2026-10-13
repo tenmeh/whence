@@ -90,8 +90,8 @@ reference:
       and renderText(). A click on the value opens the waterfall and the
       reproduce code.
     contents:
-      - explainableOutput
-      - renderExplainable
+      - whenceOutput
+      - renderWhence
 
   - title: The engine, with no Shiny
     desc: >

@@ -259,3 +259,64 @@ test_that("empty sources and empty aggregates keep zero ids", {
   expect_identical(whence_rows(whence_trace(d |> summarise(n = n()))), d)
   expect_identical(whence_rows(whence_trace(d |> count(x) |> summarise(n = n()))), d)
 })
+
+test_that("step gives the rows that one step removed", {
+  local_dplyr()
+  sales <- make_sales()
+
+  tr <- whence_trace(
+    sales |>
+      filter(region == "APAC") |>
+      filter(year >= 2023) |>
+      summarise(total = sum(revenue))
+  )
+
+  expect_identical(nrow(whence_rows(tr, step = 1)), 10L)
+  expect_identical(unique(whence_rows(tr, step = 1)$region), "EMEA")
+  expect_identical(rownames(whence_rows(tr, step = 2)), c("1", "2", "6", "7"))
+  expect_identical(nrow(whence_rows(tr, step = 3)), 0L)
+  expect_identical(nrow(whence_rows(tr, n = 2, step = 1)), 2L)
+})
+
+test_that("step must be the number of a step", {
+  local_dplyr()
+  sales <- make_sales()
+  tr <- whence_trace(sales |> filter(region == "APAC") |> summarise(n = n()))
+
+  expect_error(whence_rows(tr, step = 0), "a whole number from 1 to 2")
+  expect_error(whence_rows(tr, step = 3), "a whole number from 1 to 2")
+  expect_error(whence_rows(tr, step = "1"), "a whole number from 1 to 2")
+  expect_error(whence_rows(whence_trace(sum(1:3)), step = 1), "this pipeline has no steps")
+})
+
+test_that("a step before distinct() can still show its removed rows", {
+  local_dplyr()
+  sales <- make_sales()
+  tr <- whence_trace(
+    sales |>
+      filter(region == "APAC") |>
+      distinct(customer) |>
+      summarise(n = n())
+  )
+
+  expect_identical(nrow(whence_rows(tr, step = 1)), 10L)
+  expect_warning(rows <- whence_rows(tr, step = 2), "past distinct()", fixed = TRUE)
+  expect_null(rows)
+})
+
+test_that("after a summary, a step that drops groups removes their source rows", {
+  local_dplyr()
+  sales <- make_sales()
+  tr <- whence_trace(
+    sales |>
+      group_by(region) |>
+      summarise(total = sum(revenue)) |>
+      filter(total > 10000) |>
+      pull(total)
+  )
+
+  removed <- whence_rows(tr, step = 3)
+
+  expect_identical(unique(removed$region), "APAC")
+  expect_identical(nrow(removed), 10L)
+})

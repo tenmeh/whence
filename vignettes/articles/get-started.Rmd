@@ -27,8 +27,8 @@ pak::pak("tenmeh/whence")
 
 ## In a Shiny app
 
-Replace `textOutput()` and `renderText()` with `explainableOutput()` and
-`renderExplainable()`. Give the render a pipeline that ends in one value. You
+Replace `textOutput()` and `renderText()` with `whenceOutput()` and
+`renderWhence()`. Give the render a pipeline that ends in one value. You
 do not need to change the pipeline.
 
 ```{r, eval = FALSE}
@@ -38,11 +38,11 @@ library(whence)
 
 ui <- fluidPage(
   selectInput("cyl", "Cylinders", c(4, 6, 8)),
-  explainableOutput("mean_mpg", label = "Mean mpg")
+  whenceOutput("mean_mpg", label = "Mean mpg")
 )
 
 server <- function(input, output, session) {
-  output$mean_mpg <- renderExplainable(
+  output$mean_mpg <- renderWhence(
     mtcars |>
       filter(cyl == input$cyl) |>
       filter(hp < 150) |>
@@ -67,11 +67,11 @@ The [live demo](live-demo.html) shows all of this in your browser.
 
 ## Show a value as you want
 
-`format` in `renderExplainable()` is a function that turns the value into
+`format` in `renderWhence()` is a function that turns the value into
 the text to show. A formatter of 'scales' works:
 
 ```{r, eval = FALSE}
-output$revenue <- renderExplainable(
+output$revenue <- renderWhence(
   sales |> filter(region == input$region) |> summarise(total = sum(revenue)),
   format = scales::label_dollar()
 )

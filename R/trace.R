@@ -83,7 +83,7 @@ whence_trace <- function(expr, env = parent.frame()) {
 
 #' Run the count pass on an unevaluated expression
 #' @noRd
-trace_expr <- function(expr, env) {
+trace_expr <- function(expr, env, mode = "value") {
   if (rlang::is_quosure(expr)) {
     env <- rlang::quo_get_env(expr)
     expr <- rlang::quo_get_expr(expr)
@@ -108,6 +108,7 @@ trace_expr <- function(expr, env) {
   seed <- save_seed(parts$stages)
 
   records <- list(source_record(parts$source, current, env))
+  keys <- NULL
   for (i in seq_along(parts$stages)) {
     stage <- parts$stages[[i]]
     stage$call <- substitute_inputs(stage$call, env)
@@ -116,14 +117,19 @@ trace_expr <- function(expr, env) {
     current <- eval_stage(stage, current, env)
     check_not_lazy(current)
     records <- c(records, list(stage_record(stage, before, current, env)))
+    if (stage_verb(stage) %in% aggregate_verbs) {
+      # The groups of the last summary are the rows of a table.
+      keys <- aggregate_keys(stage, stage_verb(stage), before, current)
+    }
   }
 
-  value <- extract_scalar(current)
+  value <- if (identical(mode, "table")) extract_table(current) else extract_scalar(current)
 
   structure(
     list(
       value = value,
       stages = bind_records(records),
+      keys = if (identical(mode, "table")) table_keys(keys, value) else NULL,
       code = build_code(parts$source, parts$stages, env, seed),
       traced = is.data.frame(source_data) && length(parts$stages) > 0,
       reason = trace_reason(parts$source, length(parts$stages), source_data),
@@ -134,8 +140,55 @@ trace_expr <- function(expr, env) {
       env = env,
       seed = seed
     ),
-    class = "whence_trace"
+    class = if (identical(mode, "table")) c("whence_table", "whence_trace") else "whence_trace"
   )
+}
+
+
+#' The columns that name the groups of a summary step
+#'
+#' A grouped input gives its grouping columns. `count()` puts its count in the
+#' last column, so the other columns are the groups. `summarise(.by = )`
+#' keeps the `.by` columns, which are the input columns that the summary did
+#' not name.
+#' @noRd
+aggregate_keys <- function(stage, verb, before, after) {
+  if (verb == "count") {
+    return(utils::head(names(after), -1))
+  }
+  if (is_grouped(before)) {
+    return(group_names(before))
+  }
+  if (verb == "tally") {
+    return(character(0))
+  }
+  arg_names <- names(stage$call)[-(1:2)] %||% character(0)
+  summary_names <- arg_names[nzchar(arg_names) & !arg_names %in% c(".by", "by", ".groups")]
+  setdiff(intersect(names(after), names(before)), summary_names)
+}
+
+
+#' The group columns of a table, when every one of them is in the table
+#' @noRd
+table_keys <- function(keys, value) {
+  if (length(keys) == 0 || !all(keys %in% names(value))) {
+    return(NULL)
+  }
+  keys
+}
+
+
+#' Check the result of a table pipeline
+#' @noRd
+extract_table <- function(x) {
+  if (!is.data.frame(x)) {
+    stop(
+      "whence can explain a table. The pipeline returned an object of class `",
+      class(x)[1], "`, not a data frame.",
+      call. = FALSE
+    )
+  }
+  x
 }
 
 
@@ -225,7 +278,8 @@ source_record <- function(source, data, env) {
     kind = "source",
     verb = NA_character_,
     groups = if (is_grouped(data)) group_count(data) else NA_integer_,
-    shown = TRUE
+    shown = TRUE,
+    percent = NA_real_
   )
 }
 
@@ -250,6 +304,12 @@ stage_record <- function(stage, before, after, env) {
   if (kind == "pull") {
     shown <- FALSE
   }
+  before_n <- row_count(before)
+  percent <- if (is.na(delta) || delta == 0 || is.na(before_n) || before_n == 0) {
+    NA_real_
+  } else {
+    100 * delta / before_n
+  }
 
   new_record(
     label = stage_label(stage, kind, before, after, env),
@@ -258,17 +318,19 @@ stage_record <- function(stage, before, after, env) {
     kind = kind,
     verb = stage$verb,
     groups = if (is_grouped(after)) group_count(after) else NA_integer_,
-    shown = shown
+    shown = shown,
+    percent = percent
   )
 }
 
 
 #' @noRd
-new_record <- function(label, n, delta, kind, verb, groups, shown) {
+new_record <- function(label, n, delta, kind, verb, groups, shown, percent) {
   data.frame(
     label = label,
     n = as.integer(n),
     delta = as.integer(delta),
+    percent = as.numeric(percent),
     kind = kind,
     verb = verb,
     groups = as.integer(groups),
@@ -278,11 +340,25 @@ new_record <- function(label, n, delta, kind, verb, groups, shown) {
 }
 
 
+#' Bind the records, and number the steps: 0 is the source
 #' @noRd
 bind_records <- function(records) {
   out <- do.call(rbind, records)
   rownames(out) <- NULL
-  out
+  cbind(step = seq_len(nrow(out)) - 1L, out)
+}
+
+
+#' A percentage as text: "50%", "<1%" for a small one, "" for none
+#'
+#' A share that rounds to 100% but is not all of the rows is "99%", so that
+#' "100%" always means every row.
+#' @noRd
+format_percent <- function(percent) {
+  size <- abs(percent)
+  rounded <- ifelse(size < 100 & round(size) >= 100, 99, round(size))
+  out <- ifelse(is.na(percent), "", ifelse(size < 1, "<1%", paste0(rounded, "%")))
+  unname(out)
 }
 
 

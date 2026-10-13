@@ -45,17 +45,17 @@ ui <- fluidPage(
     ),
     mainPanel(
       tags$p("Click a number to see where it came from."),
-      tags$h3(explainableOutput("revenue", label = "Revenue")),
-      tags$h3(explainableOutput("orders", label = "Orders")),
-      tags$h3(explainableOutput("top_share", label = "Share of the top customer (%)")),
-      tags$h3(explainableOutput("customers", label = "Customers"))
+      tags$h3(whenceOutput("revenue", label = "Revenue")),
+      tags$h3(whenceOutput("orders", label = "Orders")),
+      tags$h3(whenceOutput("top_share", label = "Share of the top customer (%)")),
+      tags$h3(whenceOutput("customers", label = "Customers"))
     )
   )
 )
 
 # --- Server -------------------------------------------------------------------
 server <- function(input, output, session) {
-  output$revenue <- renderExplainable(
+  output$revenue <- renderWhence(
     sales |>
       filter(region == input$region) |>
       filter(year >= input$from) |>
@@ -64,14 +64,14 @@ server <- function(input, output, session) {
     format = dollars
   )
 
-  output$orders <- renderExplainable(
+  output$orders <- renderWhence(
     sales |>
       filter(region == input$region, year >= input$from) |>
       filter(channel %in% input$channel) |>
       count()
   )
 
-  output$top_share <- renderExplainable(
+  output$top_share <- renderWhence(
     sales |>
       filter(region == input$region, year >= input$from) |>
       group_by(customer) |>
@@ -82,7 +82,7 @@ server <- function(input, output, session) {
   )
 
   # distinct() ends row attribution. The waterfall still works.
-  output$customers <- renderExplainable(
+  output$customers <- renderWhence(
     sales |>
       filter(region == input$region, year >= input$from) |>
       distinct(customer) |>

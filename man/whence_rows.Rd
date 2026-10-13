@@ -2,26 +2,36 @@
 % Please edit documentation in R/rows.R
 \name{whence_rows}
 \alias{whence_rows}
-\title{The rows that make the value}
+\title{The rows that make the value, or the rows that a step removed}
 \usage{
-whence_rows(trace, n = NULL)
+whence_rows(trace, n = NULL, step = NULL)
 }
 \arguments{
-\item{trace}{A \code{whence_trace} from \code{\link[=whence_trace]{whence_trace()}}.}
+\item{trace}{A \code{whence_trace} from \code{\link[=whence_trace]{whence_trace()}} or \code{\link[=whence_table]{whence_table()}},
+or a group from \code{\link[=whence_group]{whence_group()}}.}
 
 \item{n}{The largest number of rows to give, or \code{NULL} for all of them.}
+
+\item{step}{\code{NULL} for the rows that make the value, or the number of a
+step for the rows that it removed.}
 }
 \value{
-The contributing rows of the source data, in their original
-order, with the columns of the source. \code{NULL}, with a warning of class
+Rows of the source data, in their original order, with the
+columns of the source. \code{NULL}, with a warning of class
 \code{whence_rows_unavailable}, when the rows cannot be found.
 }
 \description{
-\code{whence_rows()} finds the rows of the source data that contribute to the
-value of a trace. For \code{sales |> filter(...) |> summarise(total = sum(x))}
-these are the rows of \code{sales} that the filters keep.
+\code{whence_rows()} finds rows of the source data. With no \code{step}, it gives the
+rows that contribute to the value: for
+\code{sales |> filter(...) |> summarise(total = sum(x))} these are the rows of
+\code{sales} that the filters keep. With \code{step = k}, it gives the rows that step
+\code{k} removed. The steps are numbered as in the \code{step} column of
+\code{as.data.frame(trace)}, where the source is step 0.
 }
 \details{
+For a group from \code{\link[=whence_group]{whence_group()}}, both are limited to the rows of that
+group.
+
 The function replays the pipeline with a hidden id column on a copy of
 the source. \code{\link[=whence_trace]{whence_trace()}} never does this, so the waterfall costs
 nothing extra. The data that you give is never changed.
@@ -29,8 +39,9 @@ nothing extra. The data that you give is never changed.
 Some steps destroy the link between a row and the source:
 \code{distinct()}, \code{pivot_longer()}, \code{pivot_wider()}, and each step that is
 not a known verb. After such a step the function gives \code{NULL} with a
-warning that names the step. The waterfall of the trace is still
-complete, because it uses counts only.
+warning that names the step. The rows that an earlier step removed can
+still be found. The waterfall of the trace is always complete, because it
+uses counts only.
 }
 \examples{
 \dontshow{if (requireNamespace("dplyr", quietly = TRUE)) withAutoprint(\{ # examplesIf}
@@ -38,9 +49,13 @@ library(dplyr, warn.conflicts = FALSE)
 
 trace <- whence_trace(
   mtcars |>
-    filter(cyl == 4, mpg > 30) |>
+    filter(cyl == 4) |>
+    filter(mpg > 30) |>
     summarise(mean_hp = mean(hp))
 )
 whence_rows(trace)
+
+# The cars that the second filter removed
+whence_rows(trace, step = 2)
 \dontshow{\}) # examplesIf}
 }
