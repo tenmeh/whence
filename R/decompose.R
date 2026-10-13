@@ -44,6 +44,10 @@ decompose_pipeline <- function(expr) {
   stages <- list()
 
   repeat {
+    if (is.call(expr) && identical(expr[[1]], quote(`{`)) && length(expr) == 2) {
+      expr <- expr[[2]]
+      next
+    }
     if (is_magrittr_pipe(expr)) {
       stage <- magrittr_stage(expr[[3]])
       if (is.null(stage)) {
@@ -196,7 +200,7 @@ replace_symbol <- function(expr, from, to) {
   }
   if (is.call(expr)) {
     for (i in seq_along(expr)) {
-      if (!is.null(expr[[i]]) && !identical(expr[[i]], quote(expr = ))) {
+      if (!identical(expr[[i]], quote(expr = )) && !is.null(expr[[i]])) {
         expr[[i]] <- replace_symbol(expr[[i]], from, to)
       }
     }

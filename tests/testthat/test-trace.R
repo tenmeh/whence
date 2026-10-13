@@ -217,3 +217,35 @@ test_that("the data that was given is not changed", {
 
   expect_identical(sales, before)
 })
+test_that("single expression blocks are traced", {
+  local_dplyr()
+  d <- data.frame(x = 1:4)
+  tr <- whence_trace({
+    d |> filter(x > 2) |> summarise(n = n())
+  })
+  expect_identical(tr$traced, TRUE)
+  expect_identical(tr$stages$n, c(4L, 2L, 1L))
+})
+
+test_that("multiple expression blocks trace with local bindings", {
+  local_dplyr()
+  d <- data.frame(x = 1:4)
+  k <- 99
+  tr <- whence_trace({
+    k <- 2
+    d |> filter(x > k) |> summarise(n = n())
+  })
+  expect_identical(tr$traced, TRUE)
+  expect_identical(tr$stages$n, c(4L, 2L, 1L))
+  expect_identical(whence_value(tr), 2L)
+  expect_identical(k, 99)
+  expect_identical(whence_rows(tr), d[3:4, , drop = FALSE])
+})
+
+test_that("regrouping with the same count is shown", {
+  local_dplyr()
+  d <- data.frame(a = c(1, 1, 2, 2), b = c(1, 2, 1, 2))
+  tr <- whence_trace(d |> group_by(a) |> group_by(b) |> ungroup() |> summarise(n = n()))
+  expect_identical(tr$stages$shown[3], TRUE)
+  expect_identical(tr$stages$label[3], "grouped by b")
+})

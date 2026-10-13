@@ -116,3 +116,26 @@ test_that("decompose.R refers to neither dplyr nor shiny", {
 
   expect_identical(grep("dplyr|shiny", code, value = TRUE), character(0))
 })
+test_that("symbol replacement preserves empty magrittr arguments", {
+  parts <- decompose_pipeline(quote(d %>% f(.[, 1])))
+  expect_identical(
+    replace_symbol(parts$stages[[1]]$call, placeholder_sym, quote(.)),
+    quote(f(., .[, 1]))
+  )
+})
+
+test_that("single expression braces unwrap without evaluation", {
+  touched <- FALSE
+  parts <- decompose_pipeline(quote({
+    stop(touched <- TRUE) |> summarise(n = n())
+  }))
+  expect_identical(touched, FALSE)
+  expect_identical(parts$source, quote(stop(touched <- TRUE)))
+  expect_length(parts$stages, 1L)
+  block <- quote({
+    touched <- TRUE
+    d |> summarise(n = n())
+  })
+  expect_identical(decompose_pipeline(block)$source, block)
+  expect_identical(touched, FALSE)
+})

@@ -116,10 +116,13 @@ js <- function(app, code) app$get_js(code)
 press <- function(app, key, code = key, keycode = 0, shift = FALSE) {
   cdp <- app$get_chromote_session()
   for (type in c("keyDown", "keyUp")) {
+    # A native button acts on Enter only when the key event carries its
+    # character, as a real key press does.
     cdp$Input$dispatchKeyEvent(
       type = type, key = key, code = code,
       windowsVirtualKeyCode = keycode,
-      modifiers = if (shift) 8 else 0
+      modifiers = if (shift) 8 else 0,
+      text = if (type == "keyDown" && key == "Enter") "\r" else NULL
     )
   }
 }
@@ -210,11 +213,15 @@ test_that("View the rows fires the input and fills the table", {
 
   app$click(selector = "#total .whence-value")
   app$wait_for_js(panel_open)
-  app$click(selector = ".whence-rows-button")
+  # A keyboard user: the focus is on the button when it is pressed.
+  app$run_js("document.querySelector('.whence-rows-button').focus()")
+  press(app, "Enter", keycode = 13)
   app$wait_for_js("document.querySelector('.whence-rows h3') !== null")
 
   inputs <- names(app$get_values(input = TRUE)$input)
   expect_identical(grep("whence_rows", inputs, value = TRUE), "total_whence_rows")
+  # The button is gone, so the focus moves to the heading of the rows.
+  expect_identical(js(app, "document.activeElement.textContent"), "6 rows")
   expect_identical(js(app, "document.querySelector('.whence-rows h3').textContent"), "6 rows")
   app$wait_for_js("document.querySelector('.whence-rows-content').textContent.indexOf('Acme') >= 0")
   expect_identical(js(app, "document.querySelector('.whence-rows-content').textContent.indexOf('EMEA')"), -1L)
@@ -269,4 +276,19 @@ test_that("on a narrow screen the panel is a sheet at the bottom", {
 
   expect_identical(js(app, "getComputedStyle(document.querySelector('.whence-panel')).position"), "fixed")
   expect_identical(js(app, "getComputedStyle(document.querySelector('.whence-panel')).bottom"), "0px")
+})
+test_that("fallback rows payload reports the rows actually shown", {
+  local_dplyr()
+  d <- data.frame(x = seq_len(500))
+  tr <- whence_trace(d |> summarise(n = n()))
+  payload <- NULL
+  session <- list(sendCustomMessage = function(type, message) payload <<- message)
+  send_rows(session, "n", tr, has_reactable = FALSE)
+  expect_identical(rows_cap(TRUE), 10000L)
+  expect_identical(rows_cap(FALSE), 200L)
+  expect_identical(payload$total, 500L)
+  expect_identical(payload$shown, 200L)
+  expect_identical(payload$shownText, "200")
+  expect_length(gregexpr("<td>", payload$html, fixed = TRUE)[[1]], 200L)
+  expect_length(gregexpr("<td>", as.character(plain_table(d)), fixed = TRUE)[[1]], 200L)
 })
