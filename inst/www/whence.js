@@ -18,6 +18,18 @@
   // panel is open, its elements.
   var outputs = {};
 
+  // The one input for requests to the server. See request_input in output.R.
+  var REQUEST = ".whence_request";
+
+  // How long an unbound output waits before it tells the server that it is
+  // gone. renderUI() unbinds an output and binds a new one with the same id
+  // at once, and that must not count as gone.
+  var GONE_DELAY = 500;
+
+  function request(id, action) {
+    Shiny.setInputValue(REQUEST, { id: id, action: action, at: Date.now() }, { priority: "event" });
+  }
+
   function make(tag, attrs, text) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -44,7 +56,7 @@
 
   function stateOf(id) {
     if (!outputs[id]) {
-      outputs[id] = { data: null, panel: null, backdrop: null };
+      outputs[id] = { data: null, panel: null, backdrop: null, goneTimer: null };
     }
     return outputs[id];
   }
@@ -56,6 +68,7 @@
     var state = stateOf(id);
     var restoreFocus = state.panel && state.panel.contains(document.activeElement);
     closePanel(id, false);
+    cancelGone(state);
     state.data = data;
 
     var slot = slotOf(el);
@@ -246,7 +259,7 @@
         button.setAttribute("aria-disabled", "true");
         button.textContent = "Loading the rows...";
         region.setAttribute("aria-busy", "true");
-        Shiny.setInputValue(id + "_whence_rows", { at: Date.now() }, { priority: "event" });
+        request(id, "rows");
       });
       section.appendChild(button);
     } else if (data.rowsReason) {
@@ -414,6 +427,42 @@
 
   // --- Registration -----------------------------------------------------
 
+  // --- Clean-up when an output is removed ----------------------------------
+
+  // The panel is in document.body, so it does not go with its output. When
+  // Shiny unbinds an output, the panel closes at once. If no output with the
+  // same id is bound again soon, the state here is dropped and the server is
+  // told, so that it drops the trace and its data.
+  function onUnbound(event) {
+    var el = event.target;
+    if (event.bindingType !== "output" || !el.classList || !el.classList.contains("whence-output")) {
+      return;
+    }
+    var id = el.id;
+    var state = outputs[id];
+    if (!state) {
+      return;
+    }
+    closePanel(id, false);
+    cancelGone(state);
+    state.goneTimer = window.setTimeout(function () {
+      state.goneTimer = null;
+      var again = document.getElementById(id);
+      if (again && again.classList.contains("shiny-bound-output")) {
+        return;
+      }
+      delete outputs[id];
+      request(id, "gone");
+    }, GONE_DELAY);
+  }
+
+  function cancelGone(state) {
+    if (state.goneTimer) {
+      window.clearTimeout(state.goneTimer);
+      state.goneTimer = null;
+    }
+  }
+
   function register() {
     var binding = new Shiny.OutputBinding();
     binding.find = function (scope) {
@@ -437,6 +486,7 @@
     };
     Shiny.outputBindings.register(binding, "whence.explainable");
     Shiny.addCustomMessageHandler("whence:rows", showRows);
+    $(document).on("shiny:unbound", onUnbound);
   }
 
   if (window.Shiny && window.Shiny.OutputBinding) {

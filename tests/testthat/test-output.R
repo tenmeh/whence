@@ -136,6 +136,79 @@ test_that("two renders with the same output id keep their own format", {
   })
 })
 
+# A session that only records the custom messages that it is sent.
+fake_session <- function() {
+  sent <- list()
+  list(
+    sendCustomMessage = function(type, message) {
+      sent[[length(sent) + 1]] <<- list(type = type, message = message)
+    },
+    sent = function() sent
+  )
+}
+
+test_that("a gone request drops the trace of that output only", {
+  traces <- list2env(list(a = "trace a", b = "trace b"))
+  session <- fake_session()
+
+  handle_request(session, traces, list(id = "a", action = "gone"))
+
+  expect_identical(sort(ls(traces)), "b")
+  expect_length(session$sent(), 0)
+})
+
+test_that("a rows request for a dropped trace gets a clear answer", {
+  traces <- new.env()
+  session <- fake_session()
+
+  handle_request(session, traces, list(id = "a", action = "rows"))
+
+  sent <- session$sent()
+  expect_identical(sent[[1]]$type, "whence:rows")
+  expect_identical(sent[[1]]$message$ok, FALSE)
+  expect_match(sent[[1]]$message$message, "not available any more", fixed = TRUE)
+})
+
+test_that("a request with a bad id is ignored", {
+  traces <- list2env(list(a = "trace a"))
+  session <- fake_session()
+
+  for (id in list(NULL, 1, c("a", "b"), "")) {
+    handle_request(session, traces, list(id = id, action = "gone"))
+  }
+
+  expect_identical(ls(traces), "a")
+  expect_length(session$sent(), 0)
+})
+
+test_that("a failure to build the rows is sent to the panel, not raised", {
+  traces <- list2env(list(a = structure(list(), class = "whence_trace")))
+  session <- fake_session()
+  local_mocked_bindings(send_rows = function(...) stop("boom"))
+
+  expect_no_error(handle_request(session, traces, list(id = "a", action = "rows")))
+  expect_identical(session$sent()[[1]]$message$ok, FALSE)
+})
+
+test_that("every output of a session shares one table of traces", {
+  local_dplyr()
+  sales <- make_sales()
+
+  server <- function(input, output, session) {
+    output$one <- renderExplainable(sales |> summarise(n = n()))
+    output$two <- renderExplainable(sales |> filter(region == "APAC") |> summarise(n = n()))
+  }
+
+  shiny::testServer(server, {
+    expect_identical(output$one$value, "20")
+    expect_identical(output$two$value, "10")
+    expect_identical(sort(ls(session$userData$.whence_traces)), c("one", "two"))
+
+    session$setInputs(.whence_request = list(id = "one", action = "gone"))
+    expect_identical(ls(session$userData$.whence_traces), "two")
+  })
+})
+
 test_that("renderExplainable() accepts a quoted expression", {
   local_dplyr()
   sales <- make_sales()
@@ -191,6 +264,7 @@ test_that("a click opens the panel with no trip to the server", {
   app$wait_for_js(panel_open)
 
   expect_identical(names(app$get_values(input = TRUE)$input), inputs_before)
+  expect_null(app$get_value(input = ".whence_request"))
   expect_identical(js(app, "document.querySelector('#total .whence-value').textContent"), "$3,900")
   expect_identical(
     js(app, "Array.from(document.querySelectorAll('.whence-waterfall dt')).map(n => n.textContent)"),
@@ -261,8 +335,8 @@ test_that("View the rows fires the input and fills the table", {
   press(app, "Enter", keycode = 13)
   app$wait_for_js("document.querySelector('.whence-rows h3') !== null")
 
-  inputs <- names(app$get_values(input = TRUE)$input)
-  expect_identical(grep("whence_rows", inputs, value = TRUE), "total_whence_rows")
+  expect_identical(app$get_value(input = ".whence_request")$id, "total")
+  expect_identical(app$get_value(input = ".whence_request")$action, "rows")
   # The button is gone, so the focus moves to the heading of the rows.
   expect_identical(js(app, "document.activeElement.textContent"), "6 rows")
   expect_identical(js(app, "document.querySelector('.whence-rows h3').textContent"), "6 rows")
@@ -289,6 +363,49 @@ test_that("after a join the panel says where the chain stopped", {
     js(app, "document.querySelector('.whence-panel .whence-untraced').textContent"),
     "Steps before inner_join() are not shown, because whence does not know inner_join()."
   )
+  expect_no_shiny_errors(app)
+})
+
+test_that("a removed output closes its panel, and the server drops its trace", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "removed")
+  wait_for_output(app, "joined")
+  expect_true("joined" %in% app$get_value(export = "traces"))
+
+  app$click(selector = "#joined .whence-value")
+  app$wait_for_js(panel_open)
+  app$click("drop")
+  app$wait_for_js("document.querySelector('.whence-panel') === null")
+  app$wait_for_js("document.querySelector('.whence-backdrop') === null")
+
+  # The server is told after a short delay.
+  app$wait_for_js("document.getElementById('joined') === null")
+  Sys.sleep(1)
+  app$wait_for_idle()
+  traces <- app$get_value(export = "traces")
+  expect_identical(c("joined" %in% traces, "total" %in% traces), c(FALSE, TRUE))
+  expect_identical(app$get_value(input = ".whence_request")$action, "gone")
+  expect_no_shiny_errors(app)
+})
+
+test_that("an output that renderUI() makes again keeps its trace and its rows", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "rebuilt")
+  wait_for_output(app, "dynamic_total")
+
+  app$click("rebuild")
+  wait_for_output(app, "dynamic_total")
+  Sys.sleep(1)
+  app$wait_for_idle()
+  expect_true("dynamic_total" %in% app$get_value(export = "traces"))
+
+  app$click(selector = "#dynamic_total .whence-value")
+  app$wait_for_js(panel_open)
+  app$click(selector = ".whence-rows-button")
+  app$wait_for_js("document.querySelector('.whence-rows h3') !== null")
+  expect_identical(js(app, "document.querySelector('.whence-rows h3').textContent"), "10 rows")
   expect_no_shiny_errors(app)
 })
 

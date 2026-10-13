@@ -171,29 +171,88 @@ stage_payload <- function(stage) {
 }
 
 
-#' Keep the latest trace of an output, and answer "View the rows"
+# The input that the browser uses for each request, for every output of the
+# session. Its value is a list: `id` (the output id) and `action` ("rows" for
+# "View the rows", "gone" when the output was removed from the page). The
+# leading dot keeps it out of the inputs that an app lists.
+request_input <- ".whence_request"
+
+
+#' Keep the latest trace of an output
 #'
-#' The observer for the rows request is made once for each output, at its
-#' first render. It reads the trace that is current when the request comes.
+#' The traces of a session are in one environment, by output id. One
+#' observer for the session answers the requests of every output. It is made
+#' at the first render, so an app with many outputs, or outputs that come and
+#' go, still has one observer.
 #' @noRd
 remember_trace <- function(session, name, trace) {
-  key <- paste0(".whence-", name)
-  state <- session$userData[[key]]
-  if (is.null(state)) {
-    state <- new.env(parent = emptyenv())
-    session$userData[[key]] <- state
-  }
-  state$trace <- trace
+  traces <- session_traces(session)
+  assign(name, trace, envir = traces)
+  invisible(traces)
+}
 
-  if (is.null(state$observer)) {
-    state$observer <- shiny::observeEvent(
-      session$input[[paste0(name, "_whence_rows")]],
-      send_rows(session, name, state$trace),
+
+#' The environment of traces of a session, made on first use
+#' @noRd
+session_traces <- function(session) {
+  traces <- session$userData$.whence_traces
+  if (is.null(traces)) {
+    traces <- new.env(parent = emptyenv())
+    session$userData$.whence_traces <- traces
+    shiny::observeEvent(
+      session$input[[request_input]],
+      handle_request(session, traces, session$input[[request_input]]),
       ignoreInit = TRUE,
       domain = session
     )
   }
-  invisible(state)
+  traces
+}
+
+
+#' Answer one request from the browser
+#'
+#' The request comes from the browser, so its fields are checked before use.
+#' A trace that is not there any more gets a clear answer, not silence: the
+#' browser can show an output again from its cache after "gone" was sent.
+#' @noRd
+handle_request <- function(session, traces, request) {
+  id <- request$id
+  if (!is.character(id) || length(id) != 1 || !nzchar(id)) {
+    return(invisible())
+  }
+  action <- request$action %||% "rows"
+
+  if (identical(action, "gone")) {
+    if (exists(id, envir = traces, inherits = FALSE)) {
+      rm(list = id, envir = traces)
+    }
+    return(invisible())
+  }
+
+  trace <- get0(id, envir = traces, inherits = FALSE)
+  if (is.null(trace)) {
+    session$sendCustomMessage("whence:rows", list(
+      id = id,
+      ok = FALSE,
+      message = "The rows are not available any more. Change an input to show the value again."
+    ))
+    return(invisible())
+  }
+
+  # An error in an observer ends the session, so a failure to build the
+  # rows is sent to the panel instead.
+  tryCatch(
+    send_rows(session, id, trace),
+    error = function(e) {
+      session$sendCustomMessage("whence:rows", list(
+        id = id,
+        ok = FALSE,
+        message = "Row attribution unavailable: the rows could not be shown."
+      ))
+    }
+  )
+  invisible()
 }
 
 

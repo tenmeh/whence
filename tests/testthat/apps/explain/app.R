@@ -16,7 +16,10 @@ ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
   tags$p(explainableOutput("total", label = "Total revenue")),
   tags$p(explainableOutput("customers", label = "Customers")),
-  tags$p(explainableOutput("joined", label = "Joined")),
+  tags$div(id = "joined-wrap", explainableOutput("joined", label = "Joined")),
+  uiOutput("dynamic"),
+  actionButton("drop", "Remove the joined output"),
+  actionButton("rebuild", "Rebuild the dynamic output"),
   tags$button(id = "after", type = "button", "A control after the outputs")
 )
 
@@ -34,6 +37,19 @@ server <- function(input, output, session) {
       distinct(customer) |>
       summarise(n = n())
   )
+  # renderUI() makes the output again, with the same id, at each rebuild.
+  output$dynamic <- renderUI({
+    input$rebuild
+    tags$p(explainableOutput("dynamic_total", label = "Dynamic"))
+  })
+  output$dynamic_total <- renderExplainable(
+    sales |> filter(region == "EMEA") |> summarise(n = n())
+  )
+  observeEvent(input$drop, removeUI("#joined-wrap"))
+
+  # The traces that the server holds, for the clean-up tests.
+  exportTestValues(traces = sort(ls(session$userData$.whence_traces)))
+
   # A join ends the chain, so the panel says where it stopped.
   output$joined <- renderExplainable(
     sales |>
