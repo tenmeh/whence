@@ -76,7 +76,10 @@ test_that("decomposition evaluates nothing", {
 })
 
 test_that("a native placeholder ends the chain safely", {
-  parts <- decompose_pipeline(quote(x |> notAVerb(y = _)))
+  # `_` came in R 4.2. Parsed at run time, so that the file still parses on
+  # R 4.1, the oldest R that whence supports.
+  skip_if(getRversion() < "4.2.0", "The native placeholder needs R 4.2.")
+  parts <- decompose_pipeline(str2lang("x |> notAVerb(y = _)"))
 
   expect_identical(parts$source, quote(notAVerb(y = x)))
   expect_length(parts$stages, 0)

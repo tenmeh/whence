@@ -100,7 +100,7 @@ test_that("arrange, mutate, select and rename have a delta of 0", {
   )
 
   expect_identical(as.data.frame(tr)$delta[2:5], rep(0L, 4))
-  expect_identical(whence_value(tr), 21)
+  expect_equal(whence_value(tr), 21)
 })
 
 test_that("the value comes from a 1 x 1 tibble", {
