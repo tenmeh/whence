@@ -2,9 +2,13 @@ CMD
 dbplyr
 dplyneage
 duckplyr
+ggplot
 lineager
 magrittr
 pkgdown
 popover
 reactable
+shinylive
+tidylog
 tidyr
+webR

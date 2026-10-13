@@ -1,7 +1,8 @@
 # A demo of whence. Run it with:
 #   shiny::runApp(system.file("examples", "demo", package = "whence"))
 #
-# Click a number to see where its rows went.
+# Click a number, a row of the table, or a bar of the plot to see where its
+# rows went.
 
 library(shiny)
 library(whence)
@@ -10,6 +11,9 @@ if (!requireNamespace("dplyr", quietly = TRUE)) {
   stop("This demo needs dplyr. Install it with install.packages(\"dplyr\").", call. = FALSE)
 }
 library(dplyr, warn.conflicts = FALSE)
+
+# The plot needs ggplot2. Without it, the demo leaves the plot out.
+has_ggplot <- requireNamespace("ggplot2", quietly = TRUE)
 
 # --- Data ---------------------------------------------------------------------
 # Made up, and the same at each start.
@@ -48,7 +52,15 @@ ui <- fluidPage(
       tags$h3(whenceOutput("revenue", label = "Revenue")),
       tags$h3(whenceOutput("orders", label = "Orders")),
       tags$h3(whenceOutput("top_share", label = "Share of the top customer (%)")),
-      tags$h3(whenceOutput("customers", label = "Customers"))
+      tags$h3(whenceOutput("customers", label = "Customers")),
+      tags$hr(),
+      whenceTableOutput("by_customer", label = "Revenue by customer"),
+      if (has_ggplot) {
+        tags$div(
+          tags$hr(),
+          whencePlotOutput("by_channel", label = "Revenue by channel", height = "320px")
+        )
+      }
     )
   )
 )
@@ -88,6 +100,35 @@ server <- function(input, output, session) {
       distinct(customer) |>
       count()
   )
+
+  # A summary table. Click the first cell of a row.
+  output$by_customer <- renderWhenceTable(
+    sales |>
+      filter(region == input$region, year >= input$from) |>
+      filter(channel %in% input$channel) |>
+      group_by(customer) |>
+      summarise(orders = n(), revenue = sum(revenue)) |>
+      mutate(share = round(100 * revenue / sum(revenue), 1)) |>
+      arrange(desc(revenue)),
+    format = list(revenue = dollars)
+  )
+
+  # The same kind of summary, as bars. Click a bar.
+  if (has_ggplot) {
+    output$by_channel <- renderWhencePlot(
+      sales |>
+        filter(region == input$region, year >= input$from) |>
+        group_by(channel) |>
+        summarise(revenue = sum(revenue)),
+      plot = function(data) {
+        ggplot2::ggplot(data, ggplot2::aes(channel, revenue)) +
+          ggplot2::geom_col(fill = "#7356D6") +
+          ggplot2::labs(x = NULL, y = "Revenue") +
+          ggplot2::theme_minimal(base_size = 14)
+      },
+      format = list(revenue = dollars)
+    )
+  }
 }
 
 shinyApp(ui, server)

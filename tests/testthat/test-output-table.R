@@ -54,7 +54,7 @@ test_that("a group request sends the panel of that row", {
   expect_identical(sent$type, "whence:group")
   expect_identical(sent$message$row, 2L)
   expect_identical(sent$message$panel$value, "region = EMEA")
-  expect_identical(sent$message$panel$rowText, "region = EMEA, total = 9,900")
+  expect_identical(sent$message$panel$rowText, "total = 9,900")
   expect_identical(ls(session$userData$.whence_groups), "tab\0372")
 })
 

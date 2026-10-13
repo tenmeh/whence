@@ -9,15 +9,16 @@ Click a number in a 'shiny' dashboard and see where its data went.
 `whence` answers one question: *"Why is this number smaller than I
 expected?"* The answer is an attrition waterfall. It shows how many rows
 each step of the pipeline removed, and gives the code that makes the number
-again.
+again. It works for a single value, for each row of a summary table, and for
+each bar or point of a plot of one.
 
 ```
 $4,281,330
 
   Where the rows went
     sales                 18,442 rows
-      region == "APAC"     3,180 rows   -15,262 rows
-      year >= 2023         1,204 rows    -1,976 rows
+      region == "APAC"     3,180 rows   -15,262 rows (83%)
+      year >= 2023         1,204 rows    -1,976 rows (62%)
       aggregated to 1 row      1 row
 
   Reproduce                                        [Copy]
@@ -43,7 +44,9 @@ Read these first.
 - **Window functions** (a `mutate()` after `group_by()` that reads other
   rows) are counted correctly. Their row attribution has no clear meaning.
 - The verbs of 'data.table', 'arrow' and 'duckplyr' are not known.
-- One value for each output. Tables and plots are not explained.
+- A table or a plot is explained row by row when it is the result of a
+  summary step (`summarise()`, `count()` or `tally()`) that keeps its group
+  columns. A plot must be a 'ggplot2' plot of that table.
 
 ## Installation
 
@@ -84,7 +87,43 @@ does a formatter of 'scales'. It runs on the server, so it can read inputs.
 
 The viewer clicks the value, or presses Enter on it, and a panel opens. The
 panel holds the waterfall and the code. It opens with no trip to the server.
-"View the rows" asks the server for the rows that make the value.
+"View the rows" asks the server for the rows that make the value, and a
+click on a removed count, such as "-1,976 rows (62%)", shows the rows that
+the step removed.
+
+## Tables and plots
+
+A summary table explains each of its rows. Click the first cell of a row to
+see how many rows of that group each step removed:
+
+```r
+ui <- fluidPage(
+  whenceTableOutput("by_region", label = "Revenue by region"),
+  whencePlotOutput("plot_region", label = "Revenue by region")
+)
+
+server <- function(input, output, session) {
+  output$by_region <- renderWhenceTable(
+    sales |>
+      filter(year >= 2023) |>
+      group_by(region) |>
+      summarise(total = sum(revenue)),
+    format = list(total = scales::label_dollar())
+  )
+
+  # The same summary, as bars. A click on a bar explains its row.
+  output$plot_region <- renderWhencePlot(
+    sales |>
+      filter(year >= 2023) |>
+      group_by(region) |>
+      summarise(total = sum(revenue)),
+    plot = function(data) ggplot(data, aes(region, total)) + geom_col()
+  )
+}
+```
+
+Under a plot, "Show the data" gives the same table, so a keyboard user can
+open each panel too.
 
 The demo has a few outputs to try. It also runs in your browser, with no
 install, on the [live demo](https://tenmeh.github.io/whence/articles/live-demo.html)
@@ -111,6 +150,11 @@ as.data.frame(trace)  # one row for each step
 whence_value(trace)   # the value
 whence_code(trace)    # the reproduce code
 whence_rows(trace)    # the rows of mtcars that make the value
+whence_rows(trace, step = 2)  # the rows that the second filter removed
+
+# A summary table, and one of its rows
+by_cyl <- whence_table(mtcars |> filter(hp > 90) |> count(cyl))
+whence_group(by_cyl, 2)
 ```
 
 ## How it works
@@ -126,6 +170,11 @@ running the pipeline in one piece.
 
 A summary step is not attrition. When `summarise()` turns 1,204 rows into
 one, the waterfall says "aggregated to 1 row", and not "-1,203".
+
+A row of a table is explained from a replay of the steps with a hidden id
+column (see below), not by a new run of the pipeline for one group. A step after the summary that compares groups,
+such as `mutate(share = total / sum(total))`, thus keeps its true value. The
+code of a row is the code of the table with a last `filter()` on the group.
 
 The rows that make the value are found only when the viewer asks for them.
 The steps then run again on a copy of the source with a hidden id column.

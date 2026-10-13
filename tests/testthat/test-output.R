@@ -486,7 +486,7 @@ test_that("a row of a table opens its own panel, and a removed count shows its r
   expect_identical(js(app, "document.querySelector('.whence-panel .whence-summary').textContent"), "region = APAC")
   expect_identical(
     js(app, "Array.from(document.querySelectorAll('.whence-waterfall dd')).map(n => n.textContent)"),
-    list("10 rows", "6 rows−4 rows (40%)", "6 rows", "1 row")
+    list("10 rows", "6 rows\u22124 rows (40%)", "6 rows", "1 row")
   )
   expect_match(js(app, "document.querySelector('.whence-code').textContent"), 'filter(region == "APAC")', fixed = TRUE)
 

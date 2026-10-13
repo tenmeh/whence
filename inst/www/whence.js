@@ -285,6 +285,7 @@
     state.backdrop = backdrop;
     state.trigger = options.trigger || null;
     state.row = options.row === undefined ? null : options.row;
+    state.anchor = options.anchor || null;
 
     if (state.trigger) {
       state.trigger.setAttribute("aria-expanded", "true");
@@ -356,6 +357,8 @@
     body.appendChild(waterfall(id, data));
     body.appendChild(codeSection(data));
     body.appendChild(rowsSection(id, data));
+    // The panel grew from "Loading", so it may need a new place.
+    place(state.panel, state.trigger, state.anchor);
     if (refocus) {
       state.panel.focus();
     }
@@ -470,8 +473,9 @@
     return section;
   }
 
-  // Put the panel below its trigger, or below the point of a click. On a
-  // narrow screen the CSS makes it a sheet at the bottom and ignores these
+  // Put the panel below its trigger, or below the point of a click. When
+  // there is no room below and more room above, it goes above. On a narrow
+  // screen the CSS makes it a sheet at the bottom and ignores these
   // positions.
   function place(panel, trigger, anchor) {
     var rect = anchor || (trigger ? trigger.getBoundingClientRect() : null);
@@ -480,10 +484,17 @@
     }
     var margin = 8;
     var width = panel.offsetWidth;
+    var height = panel.offsetHeight;
+    var view = document.documentElement.clientHeight;
     var left = rect.left + window.scrollX;
     var maxLeft = window.scrollX + document.documentElement.clientWidth - width - margin;
     left = Math.max(window.scrollX + margin, Math.min(left, maxLeft));
-    panel.style.setProperty("--whence-top", rect.bottom + window.scrollY + 6 + "px");
+    var top = rect.bottom + 6;
+    var rectTop = rect.top === undefined ? rect.bottom : rect.top;
+    if (top + height > view - margin && rectTop - 6 - height > view - top - height) {
+      top = Math.max(margin, rectTop - 6 - height);
+    }
+    panel.style.setProperty("--whence-top", top + window.scrollY + "px");
     panel.style.setProperty("--whence-left", left + "px");
   }
 

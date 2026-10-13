@@ -40,11 +40,13 @@ explain_payload <- function(trace, format = NULL) {
 #' The data for one row of a table: the panel, and the row as text
 #' @noRd
 group_payload <- function(group, format = NULL) {
-  cells <- format_cells(group$value, format, group$table$keys)
+  keys <- group$table$keys
+  cells <- format_cells(group$value, format, keys)
+  cells <- cells[!names(cells) %in% keys]
   c(
     list(
       value = group$label,
-      rowText = paste(paste(names(cells), "=", unlist(cells)), collapse = ", ")
+      rowText = if (length(cells) > 0) paste(paste(names(cells), "=", unlist(cells)), collapse = ", ")
     ),
     panel_payload(group)
   )
