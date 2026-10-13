@@ -1,0 +1,234 @@
+/* =============================================================================
+   whence.css - the value and the panel of explainableOutput()
+   The colours come from currentColor and the variables of the Bootstrap
+   theme. Each variable has a fallback for a page with no Bootstrap 5.
+   ============================================================================= */
+
+/* --- CSS custom properties -------------------------------------------------- */
+:root {
+  --whence-bg: var(--bs-body-bg, Canvas);
+  --whence-fg: var(--bs-body-color, CanvasText);
+  --whence-border: var(--bs-border-color, rgba(127, 127, 127, 0.4));
+  --whence-muted: var(--bs-secondary-color, inherit);
+  --whence-removed: var(--bs-danger-text-emphasis, inherit);
+  --whence-code-bg: var(--bs-tertiary-bg, rgba(127, 127, 127, 0.12));
+  --whence-radius: var(--bs-border-radius, 0.375em);
+}
+
+/* --- The value -------------------------------------------------------------- */
+.whence-output {
+  display: inline-block;
+}
+
+.whence-label {
+  margin-right: 0.5em;
+}
+
+.whence-value {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+
+.whence-value:hover {
+  text-decoration-style: solid;
+}
+
+.whence-value:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Text for a screen reader only. Bootstrap's class is not on every page. */
+.whence-sr {
+  position: absolute !important; /* never take space, whatever the parent */
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- The panel -------------------------------------------------------------- */
+.whence-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  background: transparent;
+}
+
+.whence-panel {
+  position: absolute;
+  top: var(--whence-top, 4em);
+  left: var(--whence-left, 1em);
+  z-index: 1061;
+  width: min(32em, calc(100vw - 1em));
+  max-height: min(36em, calc(100vh - 2em));
+  overflow: auto;
+  padding: 1em;
+  color: var(--whence-fg);
+  background: var(--whence-bg);
+  border: 1px solid var(--whence-border);
+  border-radius: var(--whence-radius);
+  box-shadow: 0 0.5em 1.5em rgba(0, 0, 0, 0.18);
+  /* Bootstrap 3 sets the root font to 10px, so the panel sizes in em. */
+  font-size: var(--bs-body-font-size, 14px);
+  line-height: 1.4;
+  text-align: left;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+.whence-panel.whence-open {
+  opacity: 1;
+  transform: none;
+}
+
+.whence-panel:focus {
+  outline: none;
+}
+
+.whence-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1em;
+}
+
+.whence-title {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.whence-close {
+  padding: 0 0.25em;
+  font-size: 1.25em;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.whence-summary {
+  margin: 0.5em 0 0.75em;
+  font-size: 1.5em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.whence-section {
+  margin: 0.75em 0 0.375em;
+  font-size: 0.8125em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--whence-muted);
+}
+
+/* --- The waterfall ---------------------------------------------------------- */
+.whence-waterfall {
+  margin: 0;
+}
+
+.whence-step {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.25em 0;
+  border-bottom: 1px solid var(--whence-border);
+}
+
+.whence-step dt {
+  font-weight: normal;
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.8125em;
+  overflow-wrap: anywhere;
+}
+
+.whence-step:not(.whence-kind-source) dt {
+  padding-left: 1em;
+}
+
+.whence-step dd {
+  display: flex;
+  gap: 0.75em;
+  margin: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.whence-delta {
+  color: var(--whence-removed);
+}
+
+.whence-delta-added,
+.whence-groups {
+  color: var(--whence-muted);
+}
+
+.whence-untraced,
+.whence-rows-note {
+  margin: 0.25em 0;
+  color: var(--whence-muted);
+}
+
+/* --- The reproduce code ----------------------------------------------------- */
+.whence-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.whence-code {
+  margin: 0;
+  padding: 0.5em 0.75em;
+  font-size: 0.8125em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--whence-code-bg);
+  border-radius: var(--whence-radius);
+}
+
+.whence-rows-section {
+  margin-top: 0.75em;
+}
+
+.whence-rows-table {
+  max-height: 20em;
+  overflow: auto;
+}
+
+/* --- Responsive overrides --------------------------------------------------- */
+/* Below Bootstrap's sm breakpoint the panel is a sheet at the bottom. */
+@media (max-width: 575.98px) {
+  .whence-panel {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 80vh;
+    border-radius: var(--whence-radius) var(--whence-radius) 0 0;
+    transform: translateY(1em);
+  }
+
+  .whence-backdrop {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whence-panel {
+    transition: none;
+    transform: none;
+  }
+}

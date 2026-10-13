@@ -1,0 +1,21 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Build artifacts
+*.tar.gz
+*.Rcheck/
+..Rcheck/
+
+# shinytest2 creates this even when no expect_screenshot()/snapshot
+# assertion is in use; nothing here is meant to be reviewed or checked in.
+tests/testthat/_snaps/
+
+# pkgdown (the site is built and deployed by CI, never committed)
+docs/
+
+# Tooling
+.claude/

@@ -1,0 +1,18 @@
+# whence 0.0.0.9000
+
+* First version.
+
+* `explainableOutput()` and `renderExplainable()` show a value in 'shiny'.
+  A click on the value opens a panel with the attrition waterfall and the
+  reproduce code, with no trip to the server.
+
+* `whence_code()` gives code that makes the value again. Only `input$name`
+  and `input[["name"]]` are replaced by their values.
+
+* `whence_rows()` finds the source rows that make the value. It runs only
+  when it is called.
+
+* `whence_trace()` splits a pipeline into its steps and records the rows
+  after each step. It works with the native pipe, the magrittr pipe and
+  nested calls. `pivot_longer()` and `pivot_wider()` from 'tidyr' are known
+  steps.
