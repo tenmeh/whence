@@ -172,8 +172,9 @@
 
   function waterfall(data) {
     if (!data.traced) {
-      return make("p", { class: "whence-untraced" }, "Pipeline not traced.");
+      return make("p", { class: "whence-untraced" }, data.reason || "Pipeline not traced.");
     }
+    var wrap = make("div", { class: "whence-waterfall-wrap" });
     var list = make("dl", { class: "whence-waterfall" });
     (data.stages || []).forEach(function (stage) {
       var step = make("div", { class: "whence-step whence-kind-" + stage.kind });
@@ -196,7 +197,12 @@
       step.appendChild(dd);
       list.appendChild(step);
     });
-    return list;
+    wrap.appendChild(list);
+    // The chain stopped at a call that whence does not know, such as a join.
+    if (data.reason) {
+      wrap.appendChild(make("p", { class: "whence-untraced" }, data.reason));
+    }
+    return wrap;
   }
 
   function codeSection(data) {

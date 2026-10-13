@@ -67,17 +67,20 @@ The [live demo](live-demo.html) shows all of this in your browser.
 
 ## Show a value as you want
 
-`format` is a function that turns the value into the text to show:
+`format` in `renderExplainable()` is a function that turns the value into
+the text to show. A formatter of 'scales' works:
 
 ```{r, eval = FALSE}
-explainableOutput(
-  "revenue",
-  label = "Revenue",
-  format = function(x) paste0("$", format(round(x), big.mark = ","))
+output$revenue <- renderExplainable(
+  sales |> filter(region == input$region) |> summarise(total = sum(revenue)),
+  format = scales::label_dollar()
 )
 ```
 
-With no `format`, a number gets a comma for each thousand.
+So does a function of your own, such as
+`function(x) paste0(round(x), " kg")`. It runs on the server, so it can read
+inputs, for example to choose a currency. With no `format`, a number gets a
+comma for each thousand.
 
 ## With no Shiny
 
@@ -125,6 +128,22 @@ whence_trace(
     summarise(mpg = mean(mpg)) |>
     filter(cyl == 6) |>
     pull(mpg)
+)
+```
+
+## When a pipeline is not traced
+
+whence knows the verbs of 'dplyr' and two pivots of 'tidyr' (the list is on
+the help page of `whence_trace()`). Any other call ends the chain, and the
+trace says where:
+
+```{r, eval = has_dplyr}
+cylinders <- data.frame(cyl = c(4, 6, 8), engine = c("small", "mid", "big"))
+whence_trace(
+  mtcars |>
+    filter(hp > 100) |>
+    inner_join(cylinders, by = "cyl") |>
+    count()
 )
 ```
 

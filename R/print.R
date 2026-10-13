@@ -56,7 +56,7 @@ format.whence_trace <- function(x, ...) {
   )
 
   if (!x$traced) {
-    lines <- c(lines, "  Pipeline not traced.")
+    lines <- c(lines, paste0("  ", x$reason %||% "Pipeline not traced."))
   } else {
     n_text <- format_count(stages$n)
     n_text[is.na(n_text)] <- ""
@@ -78,6 +78,10 @@ format.whence_trace <- function(x, ...) {
         )
       )
     )
+  }
+
+  if (x$traced && !is.null(x$reason)) {
+    lines <- c(lines, paste0("  ", x$reason))
   }
 
   c(lines, "", "Reproduce", paste0("  ", strsplit(x$code, "\n", fixed = TRUE)[[1]]))

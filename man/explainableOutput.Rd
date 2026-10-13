@@ -5,9 +5,15 @@
 \alias{renderExplainable}
 \title{An output that explains where its number came from}
 \usage{
-explainableOutput(outputId, label = NULL, format = NULL)
+explainableOutput(outputId, label = NULL)
 
-renderExplainable(expr, env = parent.frame(), quoted = FALSE)
+renderExplainable(
+  expr,
+  format = NULL,
+  env = parent.frame(),
+  quoted = FALSE,
+  outputArgs = list()
+)
 }
 \arguments{
 \item{outputId}{The output id.}
@@ -15,17 +21,22 @@ renderExplainable(expr, env = parent.frame(), quoted = FALSE)
 \item{label}{Text to show before the value, or \code{NULL} for none. The panel
 uses it in its heading too.}
 
-\item{format}{A function that takes the value and gives the text to show,
-for example \code{function(x) paste0("$", format(x, big.mark = ","))}. With
-\code{NULL}, a number gets a comma for each thousand, and any other value
-goes through \code{as.character()}.}
-
 \item{expr}{A pipeline that ends in a single value.}
+
+\item{format}{A function that takes the value and gives the text to show.
+A formatter of 'scales' works, for example \code{scales::label_dollar()}, and
+so does \code{function(x) paste0(round(x), " kg")}. With \code{NULL}, a number gets
+a comma for each thousand, and any other value goes through
+\code{as.character()}.}
 
 \item{env}{The environment in which to evaluate \code{expr}.}
 
 \item{quoted}{Is \code{expr} already quoted? Use \code{TRUE} when you give an
 expression made with \code{quote()}.}
+
+\item{outputArgs}{A list of arguments for \code{explainableOutput()}, such as
+\code{label}, when the render is used in an R Markdown document with
+\code{runtime: shiny}.}
 }
 \value{
 \code{explainableOutput()} gives an HTML tag for the UI.
@@ -39,7 +50,8 @@ again. A button in the panel shows the rows that make the value.
 }
 \details{
 \code{renderExplainable()} makes the value. Give it a pipeline that ends in a
-single value, as for \code{\link[=whence_trace]{whence_trace()}}.
+single value, as for \code{\link[=whence_trace]{whence_trace()}}. The pipeline can be inside braces,
+as in \code{renderExplainable({ ... })}.
 }
 \section{The panel}{
 The panel is a popover next to the value. On a screen narrower than 576
@@ -57,7 +69,8 @@ removed rows) and \code{.whence-code} (the reproduce code).
 \section{Reactivity}{
 Each step runs in the environment of the render. It reads inputs and
 reactive values as the full expression would, so the output updates when
-they change.
+they change. \code{format} runs on the server too, so it can read inputs, for
+example to choose a currency.
 }
 
 \examples{
@@ -75,7 +88,8 @@ if (interactive() && requireNamespace("dplyr", quietly = TRUE)) {
     output$mean_mpg <- renderExplainable(
       mtcars |>
         filter(cyl == input$cyl) |>
-        summarise(mpg = round(mean(mpg), 1))
+        summarise(mpg = mean(mpg)),
+      format = function(x) paste(round(x, 1), "mpg")
     )
   }
   shinyApp(ui, server)

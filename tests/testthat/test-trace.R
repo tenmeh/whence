@@ -183,7 +183,67 @@ test_that("a pipeline with no steps is not traced, and the value is still given"
 
   expect_identical(whence_value(tr), 6)
   expect_identical(tr$traced, FALSE)
-  expect_match(format(tr), "Pipeline not traced.", fixed = TRUE, all = FALSE)
+  expect_identical(tr$reason, "Not traced: the pipeline has no step that whence knows.")
+  expect_match(format(tr), tr$reason, fixed = TRUE, all = FALSE)
+})
+
+test_that("an untraced pipeline names the call where the chain stopped", {
+  local_dplyr()
+  sales <- make_sales()
+
+  tr <- whence_trace(sales |> filter(year > 2022) |> nrow())
+
+  expect_identical(tr$traced, FALSE)
+  expect_identical(tr$reason, "Not traced: the chain stops at nrow(), which whence does not know.")
+  expect_match(format(tr), "the chain stops at nrow()", fixed = TRUE, all = FALSE)
+})
+
+test_that("a join in the chain is named, and the steps after it are traced", {
+  local_dplyr()
+  sales <- make_sales()
+  managers <- data.frame(region = c("APAC", "EMEA"), manager = c("Kim", "Lou"))
+
+  tr <- whence_trace(
+    sales |>
+      filter(year > 2022) |>
+      dplyr::left_join(managers, by = "region") |>
+      summarise(n = n())
+  )
+
+  expect_identical(tr$traced, TRUE)
+  expect_identical(
+    tr$reason,
+    "Steps before left_join() are not shown, because whence does not know left_join()."
+  )
+  expect_match(format(tr), tr$reason, fixed = TRUE, all = FALSE)
+})
+
+test_that("a fully traced pipeline has no reason", {
+  local_dplyr()
+  sales <- make_sales()
+
+  tr <- whence_trace(sales |> filter(year > 2022) |> summarise(n = n()))
+
+  expect_null(tr$reason)
+})
+
+test_that("a source that is not a data frame is the reason", {
+  tr <- whence_trace(c(3, 1, 2) |> head(1))
+
+  expect_identical(tr$reason, "Not traced: the source is not a data frame.")
+})
+
+test_that("the help page lists every known verb", {
+  path <- test_path("..", "..", "man", "whence_trace.Rd")
+  skip_if_not(file.exists(path), "The package source is not available.")
+  rd <- paste(readLines(path), collapse = " ")
+
+  documented <- vapply(
+    whence_verbs,
+    function(v) grepl(paste0("\\code{", v, "()}"), rd, fixed = TRUE),
+    logical(1)
+  )
+  expect_identical(names(documented)[!documented], character(0))
 })
 
 test_that("a lazy table stops with a clear error", {
