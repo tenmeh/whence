@@ -218,6 +218,11 @@ test_that("View the rows fires the input and fills the table", {
   expect_identical(js(app, "document.querySelector('.whence-rows h3').textContent"), "6 rows")
   app$wait_for_js("document.querySelector('.whence-rows-content').textContent.indexOf('Acme') >= 0")
   expect_identical(js(app, "document.querySelector('.whence-rows-content').textContent.indexOf('EMEA')"), -1L)
+  # reactable is in Suggests. When it is installed, the widget itself must
+  # be drawn, and not only its HTML.
+  if (requireNamespace("reactable", quietly = TRUE)) {
+    expect_identical(js(app, "document.querySelector('.whence-rows-content .ReactTable') !== null"), TRUE)
+  }
   expect_no_shiny_errors(app)
 })
 

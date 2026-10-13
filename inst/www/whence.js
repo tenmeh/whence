@@ -372,7 +372,14 @@
     var table = make("div", { class: "whence-rows-content" });
     region.appendChild(table);
 
-    var rendered = Shiny.renderContent(table, { html: message.html, deps: message.deps });
+    // The table is an htmlwidget, and its scripts come with the message.
+    // renderContentAsync() waits until those scripts have loaded.
+    // renderContent() only adds the script tags, so a widget drawn right
+    // after it finds no HTMLWidgets yet on a slow page, such as shinylive.
+    var content = { html: message.html, deps: message.deps };
+    var rendered = Shiny.renderContentAsync
+      ? Shiny.renderContentAsync(table, content)
+      : Shiny.renderContent(table, content);
     Promise.resolve(rendered).then(function () {
       if (window.HTMLWidgets && window.HTMLWidgets.staticRender) {
         window.HTMLWidgets.staticRender();
