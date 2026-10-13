@@ -4,14 +4,17 @@
 \name{whence-package}
 \alias{whence}
 \alias{whence-package}
-\title{whence: Explain Where a Number Came From in 'shiny' Apps}
+\title{whence: Explain Where a Number Came from in 'shiny' Apps}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 Lets the viewer of a 'shiny' dashboard click a number and see where it came from. The pipeline that makes the number is split into its steps. Each step is run in turn, and the number of rows after each step is recorded. The result is an attrition waterfall that shows how many rows each step removed, together with code that reproduces the number. The steps are found from the expression alone, so the pipeline does not need to be rewritten. The rows that contribute to the number are found only when the viewer asks for them.
 }
 \seealso{
 Useful links:
 \itemize{
   \item \url{https://github.com/tenmeh/whence}
+  \item \url{https://tenmeh.github.io/whence/}
   \item Report bugs at \url{https://github.com/tenmeh/whence/issues}
 }
 

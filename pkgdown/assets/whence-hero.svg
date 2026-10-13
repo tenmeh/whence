@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 132" width="132" height="132" role="img">
+<title>The whence hex logo, alive: each bar of the waterfall drops to its height in turn, and the violet value under them gets its dotted underline.</title>
+<!--
+  The animated hex of the documentation site, for the home page.
+
+  The square is 132 units wide, as for bones and rewind. The sway tilts the
+  hex by 4 degrees and lifts it a little, and anything tighter would cut a
+  corner. The hex is the same size and at the same place as in
+  bones-hero.svg, so that the reduced-motion rule of extra.css, which swaps
+  in the still hex at 85% of the height, is right for each package.
+
+  The paths and the colours are those of pkgdown/logo/whence-hex.svg. In one
+  loop of 5.6s each bar after the first starts at the height of the bar
+  before it and drops to its own height, one after the other: the rows that
+  each step removes. Then the dotted underline is drawn under the value.
+  There is no background, so the hex shows on the paper and on the charcoal.
+
+  It is self-contained: the animation is CSS in this file. No script, no
+  font, no link to another file.
+-->
+<style>
+svg{display:block}
+.sway{transform-box:view-box;transform-origin:0 0;animation:sway 5.6s ease-in-out infinite}
+.shadow{transform-box:fill-box;transform-origin:center;opacity:.28;animation:shadow 5.6s ease-in-out infinite}
+.drop{transform-box:fill-box;transform-origin:50% 100%}
+.d2{animation:d2 5.6s cubic-bezier(.3,.7,.4,1) infinite}
+.d3{animation:d3 5.6s cubic-bezier(.3,.7,.4,1) infinite}
+.d4{animation:d4 5.6s cubic-bezier(.3,.7,.4,1) infinite}
+.dots{animation:dots 5.6s ease-out infinite}
+@keyframes sway{0%{transform:translateY(0) rotate(-4deg)}25%{transform:translateY(-3.4px) rotate(0deg)}50%{transform:translateY(0) rotate(4deg)}75%{transform:translateY(-3.4px) rotate(0deg)}100%{transform:translateY(0) rotate(-4deg)}}
+@keyframes shadow{0%,50%,100%{transform:scaleX(1);opacity:.28}25%,75%{transform:scaleX(.86);opacity:.18}}
+/* Each bar is drawn at its final height. scaleY > 1 makes it as tall as the
+   bar before it: 38/26, 26/16 and 16/9. */
+@keyframes d2{0%,8%{transform:scaleY(1.4615)}18%,88%{transform:scaleY(1)}96%,100%{transform:scaleY(1.4615)}}
+@keyframes d3{0%,20%{transform:scaleY(1.625)}30%,88%{transform:scaleY(1)}96%,100%{transform:scaleY(1.625)}}
+@keyframes d4{0%,32%{transform:scaleY(1.7778)}42%,88%{transform:scaleY(1)}96%,100%{transform:scaleY(1.7778)}}
+@keyframes dots{0%,44%{clip-path:inset(0 100% 0 0)}58%,86%{clip-path:inset(0 0 0 0)}94%,100%{clip-path:inset(0 100% 0 0)}}
+/* Still under reduced motion. With the animation off, each group has no
+   transform of its own, so the hex stands upright with each bar at its
+   final height and the underline drawn, as in the logo. extra.css also
+   swaps this picture for the still hex under the same setting. */
+@media (prefers-reduced-motion:reduce){*{animation:none !important}}
+</style>
+<ellipse class="shadow" cx="66" cy="126.5" rx="38" ry="3" fill="#7356D6"/>
+<g transform="translate(66 64)"><g class="sway"><g transform="translate(-50 -58)">
+<path d="M50 2 L98 30 L98 86 L50 114 L2 86 L2 30 Z" fill="#F4EFE4"/>
+<path d="M50 2 L98 30 L98 86 L50 114 L2 86 L2 30 Z" fill="none" stroke="#17202A" stroke-width="3" stroke-linejoin="round"/>
+<g transform="translate(50 58) scale(1.2) translate(-50 -54.5)">
+<g fill="#D9D0BE"><rect x="38.75" y="32" width="9" height="12" rx="1.5"/><rect x="52.25" y="44" width="9" height="10" rx="1.5"/><rect x="65.75" y="54" width="9" height="7" rx="1.5"/></g>
+<rect x="25.25" y="32" width="9" height="38" rx="1.5" fill="#17202A"/>
+<rect class="drop d2" x="38.75" y="44" width="9" height="26" rx="1.5" fill="#17202A"/>
+<rect class="drop d3" x="52.25" y="54" width="9" height="16" rx="1.5" fill="#17202A"/>
+<rect class="drop d4" x="65.75" y="61" width="9" height="9" rx="1.5" fill="#7356D6"/>
+<g class="dots" fill="#7356D6"><circle cx="26.5" cy="76" r="1.4"/><circle cx="32" cy="76" r="1.4"/><circle cx="37.5" cy="76" r="1.4"/><circle cx="43" cy="76" r="1.4"/><circle cx="48.5" cy="76" r="1.4"/><circle cx="54" cy="76" r="1.4"/><circle cx="59.5" cy="76" r="1.4"/><circle cx="65" cy="76" r="1.4"/><circle cx="70.5" cy="76" r="1.4"/></g>
+</g></g></g></g>
+</svg>

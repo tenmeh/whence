@@ -1,0 +1,159 @@
+---
+title: "Get started with whence"
+output: rmarkdown::html_document
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+has_dplyr <- requireNamespace("dplyr", quietly = TRUE)
+```
+
+A dashboard shows a number. The viewer thinks: *"Why is this number smaller
+than I expected?"* `whence` gives the answer with one click. It shows how
+many rows each step of the pipeline removed, and the code that makes the
+number again.
+
+## Install
+
+`whence` is not on CRAN yet. Install it from GitHub:
+
+```{r, eval = FALSE}
+# install.packages("pak")
+pak::pak("tenmeh/whence")
+```
+
+## In a Shiny app
+
+Replace `textOutput()` and `renderText()` with `explainableOutput()` and
+`renderExplainable()`. Give the render a pipeline that ends in one value. You
+do not need to change the pipeline.
+
+```{r, eval = FALSE}
+library(shiny)
+library(dplyr)
+library(whence)
+
+ui <- fluidPage(
+  selectInput("cyl", "Cylinders", c(4, 6, 8)),
+  explainableOutput("mean_mpg", label = "Mean mpg")
+)
+
+server <- function(input, output, session) {
+  output$mean_mpg <- renderExplainable(
+    mtcars |>
+      filter(cyl == input$cyl) |>
+      filter(hp < 150) |>
+      summarise(mpg = round(mean(mpg), 1))
+  )
+}
+
+shinyApp(ui, server)
+```
+
+The value has a dotted underline. A click on it, or Enter or Space when it
+has the focus, opens a panel next to it. The panel holds:
+
+* **Where the rows went.** The source, then each step with the rows after
+  it and the rows that it removed.
+* **Reproduce.** The pipeline as code, with each `input$name` replaced by
+  its current value. The viewer can copy it and run it.
+* **View the rows.** The rows of the source that make the value. This is
+  the only part that asks the server for something.
+
+The [live demo](live-demo.html) shows all of this in your browser.
+
+## Show a value as you want
+
+`format` is a function that turns the value into the text to show:
+
+```{r, eval = FALSE}
+explainableOutput(
+  "revenue",
+  label = "Revenue",
+  format = function(x) paste0("$", format(round(x), big.mark = ","))
+)
+```
+
+With no `format`, a number gets a comma for each thousand.
+
+## With no Shiny
+
+The engine works in the console, which makes it easy to test.
+`whence_trace()` takes the same pipeline:
+
+```{r, eval = has_dplyr, message = FALSE}
+library(dplyr, warn.conflicts = FALSE)
+library(whence)
+
+trace <- whence_trace(
+  mtcars |>
+    filter(cyl == 4) |>
+    filter(hp < 90) |>
+    summarise(mpg = round(mean(mpg), 1))
+)
+trace
+```
+
+One row for each step:
+
+```{r, eval = has_dplyr}
+as.data.frame(trace)
+```
+
+The value, the code, and the rows that make the value:
+
+```{r, eval = has_dplyr}
+whence_value(trace)
+cat(whence_code(trace))
+whence_rows(trace)
+```
+
+## Summaries are not attrition
+
+When `summarise()` turns 1,204 rows into one, the panel says "aggregated to
+1 row". It does not say "-1,203 rows", because no rows were lost. After a
+`group_by()` it says "grouped into 14 rows". A `group_by()` is shown only
+when it changes the groups.
+
+```{r, eval = has_dplyr}
+whence_trace(
+  mtcars |>
+    group_by(cyl) |>
+    summarise(mpg = mean(mpg)) |>
+    filter(cyl == 6) |>
+    pull(mpg)
+)
+```
+
+## When the rows cannot be found
+
+The waterfall needs only counts. To find *which* rows make the value,
+`whence_rows()` runs the steps again with a hidden id column. Some steps
+break the link between a row and the source. After `distinct()`, a pivot of
+'tidyr', or a step that is not a known verb, `whence_rows()` gives `NULL`
+with a warning that names the step. The waterfall still works.
+
+```{r, eval = has_dplyr}
+trace <- whence_trace(
+  mtcars |>
+    filter(hp > 100) |>
+    distinct(cyl) |>
+    count()
+)
+rows <- whence_rows(trace)
+```
+
+## Limits
+
+* **Database-backed pipelines are not supported.** With 'dbplyr' the steps
+  run as SQL only at `collect()`, so there are no counts for each step.
+  `whence` stops with an error, and shows no waterfall that would mislead.
+* **Joins are not traced.** A join ends the chain: the join and everything
+  upstream of it become the source.
+* **Window functions** are counted correctly, but their row attribution has
+  no clear meaning.
+* The verbs of 'data.table', 'arrow' and 'duckplyr' are not known.
+* One value for each output. Tables and plots are not explained yet.

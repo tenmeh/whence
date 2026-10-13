@@ -1,0 +1,34 @@
+---
+title: "Live demo"
+output: rmarkdown::html_document
+---
+
+This is the demo app of `whence`, running in your browser. There is no
+server: [shinylive](https://posit-dev.github.io/r-shinylive/) runs R and
+Shiny in the page with webR. The first start downloads R and the packages,
+so it can take some seconds.
+
+Things to try:
+
+* Click a number. The panel shows where its rows went, and the code that
+  makes it again.
+* Press **View the rows** in the panel to see the rows that make the value.
+* Change the region or the year, and click the number again. The code
+  holds the new values.
+* Open **Customers**. It uses `distinct()`, so the panel says that the rows
+  cannot be found. The waterfall still works.
+
+```{=html}
+<div class="whence-live-demo">
+  <iframe src="../demo/" title="whence live demo" loading="lazy"></iframe>
+</div>
+<p class="small text-muted">
+  <a href="../demo/" target="_blank" rel="noopener">Open the demo in a new tab</a>
+</p>
+```
+
+To run the same demo on your own machine:
+
+```r
+shiny::runApp(system.file("examples/demo", package = "whence"))
+```

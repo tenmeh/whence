@@ -1,0 +1,107 @@
+url: https://tenmeh.github.io/whence/
+
+template:
+  bootstrap: 5
+  light-switch: true
+  default-theme: light
+  bslib:
+    # The ground and the ink are those of bones, which come from the blog of
+    # the author, so that the documentation, bones, rewind and the blog are
+    # one family: warm bone paper, and a blue-black ink. In the dark mode they
+    # are a charcoal and a warm cream. Bootstrap makes its own tints and
+    # shades from these values, so they are set here and not only in
+    # extra.css, which holds the same values in its tokens. Change both
+    # places together.
+    bg: "#f4efe4"
+    fg: "#17202a"
+    body-bg-dark: "#1f1d1b"
+    body-color-dark: "#ece5d6"
+    border-color: "#cfc5b1"
+    border-color-dark: "#3d3833"
+    # A deep violet, of the hue of the value in the logo. The logo violet
+    # itself (#7356D6) gives only 4.5:1 on the paper, and less on the tint of
+    # the pills, so links use a darker one. #5B3FB5 gives 6.5:1 on the paper
+    # (#F4EFE4), 7.0:1 on the cards and the code blocks (#FBF8F1), and 5.4:1
+    # on the 12% tint of the pills.
+    #
+    # The dark mode does not derive its link colour from this one. Bootstrap
+    # would lighten it by 40%, which gives a dusty grey-violet. It takes a
+    # lavender of the same hue, #B4A2F2: 7.5:1 on the charcoal (#1F1D1B),
+    # 6.8:1 on the cards (#282523) and 5.6:1 on its 16% tint.
+    primary: "#5B3FB5"
+    link-color-dark: "#B4A2F2"
+    # Recursive is served from pkgdown/assets/fonts by @font-face in
+    # extra.css, so there is nothing for bslib to fetch or bundle. One family
+    # does all the work, as on the blog: the plain style for text and
+    # headings, and the mono axis of the same file for code (extra.css turns
+    # it on).
+    font-family-base: "Recursive, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    headings-font-family: "Recursive, system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-family-monospace: "Recursive, 'SF Mono', 'Cascadia Mono', Consolas, monospace"
+    headings-font-weight: 650
+    line-height-base: 1.66
+    border-radius: "14px"
+
+home:
+  title: Explain where a number came from in Shiny
+  description: >
+    Click a number in a Shiny dashboard and see where its data went: how many
+    rows each step of the pipeline removed, and the code that makes the number
+    again.
+  sidebar:
+    # The built-in "dev" component holds the badges. pkgdown gives it the
+    # heading "Dev status". This structure leaves "dev" out and uses the
+    # "status" component below in its place, as in rewind and bones.
+    #
+    # The badges appear here and in the README. Change both places together.
+    structure: [status, links, license, citation, authors]
+    components:
+      status:
+        title: Status
+        text: |
+          [![R-CMD-check](https://github.com/tenmeh/whence/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/tenmeh/whence/actions/workflows/R-CMD-check.yaml)
+
+navbar:
+  structure:
+    left: [intro, demo, reference, news]
+    right: [search, lightswitch, github]
+  components:
+    intro:
+      text: Get Started
+      href: articles/get-started.html
+    demo:
+      text: Live demo
+      href: articles/live-demo.html
+    reference:
+      text: Reference
+      href: reference/index.html
+    news:
+      text: Changelog
+      href: news/index.html
+    github:
+      icon: fa-github fa-lg
+      href: https://github.com/tenmeh/whence
+      aria-label: GitHub repository
+
+reference:
+  - title: Explain a value in Shiny
+    desc: >
+      The output and the render function. Use them in place of textOutput()
+      and renderText(). A click on the value opens the waterfall and the
+      reproduce code.
+    contents:
+      - explainableOutput
+      - renderExplainable
+
+  - title: The engine, with no Shiny
+    desc: >
+      Trace a pipeline from the console or a test, and read its parts.
+    contents:
+      - whence_trace
+      - whence_value
+      - whence_code
+      - whence_rows
+
+  - title: Package
+    contents:
+      - whence-package

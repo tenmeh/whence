@@ -11,3 +11,5 @@
 ^docs$
 ^pkgdown$
 ^\.vscode$
+^vignettes$
+^\.gitattributes$

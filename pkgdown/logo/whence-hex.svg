@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 116" width="100" height="116">
+  <!--
+    whence hex logo. An attrition waterfall in ink on bone, with a violet value.
+
+    The four bars are the waterfall of the panel: the source, then each step
+    that removes rows. Above each bar after the first is a faint ghost, as
+    tall as the bar before it. The ghost is the rows that the step removed.
+    The last bar is the value, in violet. Under the bars is a dotted line:
+    the dotted underline that marks a value that you can click.
+
+    The hexagon is inset by 2 units. A stroke sits on the centre of its
+    path, so a hexagon drawn to the edge of the viewBox would have half of
+    its border cut off.
+
+    The wordmark uses Poppins, the typeface of the wordmarks of bones and
+    rewind. It is not installed as a system font, so build-logo.R renders
+    this file in a headless browser that loads the site's own copy of the
+    font.
+  -->
+  <path d="M50 2 L98 30 L98 86 L50 114 L2 86 L2 30 Z" fill="#F4EFE4"/>
+  <path d="M50 2 L98 30 L98 86 L50 114 L2 86 L2 30 Z" fill="none"
+        stroke="#17202A" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- The ghosts: the rows that each step removed. -->
+  <g fill="#D9D0BE">
+    <rect x="38.75" y="32" width="9" height="12" rx="1.5"/>
+    <rect x="52.25" y="44" width="9" height="10" rx="1.5"/>
+    <rect x="65.75" y="54" width="9" height="7" rx="1.5"/>
+  </g>
+
+  <!-- The bars: the rows after each step. The last is the value. -->
+  <g fill="#17202A">
+    <rect x="25.25" y="32" width="9" height="38" rx="1.5"/>
+    <rect x="38.75" y="44" width="9" height="26" rx="1.5"/>
+    <rect x="52.25" y="54" width="9" height="16" rx="1.5"/>
+  </g>
+  <rect x="65.75" y="61" width="9" height="9" rx="1.5" fill="#7356D6"/>
+
+  <!-- The dotted underline of a value that you can click. -->
+  <g fill="#7356D6">
+    <circle cx="26.5" cy="76" r="1.4"/>
+    <circle cx="32.0" cy="76" r="1.4"/>
+    <circle cx="37.5" cy="76" r="1.4"/>
+    <circle cx="43.0" cy="76" r="1.4"/>
+    <circle cx="48.5" cy="76" r="1.4"/>
+    <circle cx="54.0" cy="76" r="1.4"/>
+    <circle cx="59.5" cy="76" r="1.4"/>
+    <circle cx="65.0" cy="76" r="1.4"/>
+    <circle cx="70.5" cy="76" r="1.4"/>
+  </g>
+
+  <text x="50" y="96" text-anchor="middle" font-size="12.5" font-weight="500"
+        fill="#17202A" font-family="Poppins, sans-serif">whence</text>
+</svg>

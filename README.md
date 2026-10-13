@@ -1,4 +1,8 @@
-# whence
+# whence <img src="man/figures/logo.png" align="right" height="139" alt="whence logo" />
+
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/tenmeh/whence/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/tenmeh/whence/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
 
 Click a number in a 'shiny' dashboard and see where its data went.
 
@@ -82,7 +86,9 @@ The viewer clicks the value, or presses Enter on it, and a panel opens. The
 panel holds the waterfall and the code. It opens with no trip to the server.
 "View the rows" asks the server for the rows that make the value.
 
-The demo has a few outputs to try:
+The demo has a few outputs to try. It also runs in your browser, with no
+install, on the [live demo](https://tenmeh.github.io/whence/articles/live-demo.html)
+page. To run it on your machine:
 
 ```r
 shiny::runApp(system.file("examples", "demo", package = "whence"))

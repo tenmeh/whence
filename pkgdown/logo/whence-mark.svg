@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!--
+    The bare mark, for the favicons. It has no wordmark on purpose.
+
+    At 16 pixels the four bars of the logo merge, so this square version has
+    three thick bars: two in ink and the value in violet, each with the ghost
+    of the rows it lost. The dotted underline is four large dots. build-logo.R
+    makes every favicon from this file.
+
+    The square has an ink border, so that the light square still shows on
+    a light browser tab.
+  -->
+  <rect x="2" y="2" width="96" height="96" rx="18" fill="#F4EFE4"
+        stroke="#17202A" stroke-width="4"/>
+  <g fill="#D9D0BE">
+    <rect x="40" y="18" width="20" height="18" rx="3"/>
+    <rect x="68" y="36" width="20" height="18" rx="3"/>
+  </g>
+  <rect x="12" y="18" width="20" height="54" rx="3" fill="#17202A"/>
+  <rect x="40" y="36" width="20" height="36" rx="3" fill="#17202A"/>
+  <rect x="68" y="54" width="20" height="18" rx="3" fill="#7356D6"/>
+  <g fill="#7356D6">
+    <circle cx="19" cy="84" r="4"/>
+    <circle cx="39" cy="84" r="4"/>
+    <circle cx="59" cy="84" r="4"/>
+    <circle cx="79" cy="84" r="4"/>
+  </g>
+</svg>
