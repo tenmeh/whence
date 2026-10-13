@@ -86,3 +86,39 @@ test_that("an input of NULL is written as NULL", {
   env <- list2env(list(input = list(a = NULL)))
   expect_identical(substitute_inputs(quote(f(input$a, 1)), env), quote(f(NULL, 1)))
 })
+test_that("empty arguments survive input substitution", {
+  local_dplyr()
+  d <- data.frame(x = 1:3)
+  tr <- whence_trace(d |> summarise(z = sum(d[, 1])))
+  expect_identical(whence_value(tr), 6L)
+  expect_identical(eval(parse(text = whence_code(tr)))$z, 6L)
+})
+
+test_that("magrittr nested dots reproduce the traced value", {
+  local_dplyr()
+  d <- data.frame(x = 1:3)
+  tr <- whence_trace(d %>% filter(x == max(.$x)) %>% summarise(n = n()))
+  expect_identical(eval(parse(text = whence_code(tr)))$n, whence_value(tr))
+})
+
+test_that("magrittr explicit dots preserve string literals", {
+  local_dplyr()
+  d <- data.frame(x = 1:3)
+  f <- function(data, s) s
+  tr <- whence_trace(d %>% f(., ".whence_data"))
+  expect_match(whence_code(tr), '".whence_data"', fixed = TRUE)
+  expect_identical(eval(parse(text = whence_code(tr))), whence_value(tr))
+})
+
+test_that("sample code explains that another draw can differ", {
+  local_dplyr()
+  withr::local_seed(42)
+  d <- data.frame(x = 1:10)
+  tr <- whence_trace(d |> slice_sample(n = 2) |> summarise(z = sum(x)))
+  code <- whence_code(tr)
+  expect_identical(
+    strsplit(code, "\n", fixed = TRUE)[[1]][1],
+    "# slice_sample() draws at random, so this code can give another value."
+  )
+  expect_type(eval(parse(text = code))$z, "integer")
+})

@@ -10,22 +10,24 @@
 
 #' Build the reproduce code for a pipeline
 #' @noRd
-build_code <- function(source, stages, env) {
+build_code <- function(source, stages, env, seed = NULL) {
   code <- deparse_one(substitute_inputs(source, env), collapse = "\n")
 
   for (stage in stages) {
     call <- substitute_inputs(stage$call, env)
-    if (stage$dot) {
-      # The native pipe cannot put the data in a position other than the
-      # first. The upstream code is thus nested in the call.
-      text <- deparse_one(call, collapse = "\n")
-      code <- gsub(".whence_data", paste0("(", code, ")"), text, fixed = TRUE)
+    if (stage$magrittr && (stage$dot || "." %in% all.names(call))) {
+      body <- replace_symbol(call, placeholder_sym, quote(.))
+      text <- deparse_one(body, collapse = "\n")
+      code <- paste0("(function(.) ", text, ")(", code, ")")
     } else {
       step <- deparse_one(call[-2], collapse = "\n")
       code <- paste0(code, " |>\n  ", step)
     }
   }
 
+  if (!is.null(seed)) {
+    code <- paste0("# slice_sample() draws at random, so this code can give another value.\n", code)
+  }
   code
 }
 
@@ -50,9 +52,8 @@ substitute_inputs <- function(expr, env) {
 
   if (is.call(expr)) {
     for (i in seq_along(expr)) {
-      part <- expr[[i]]
-      if (!is.null(part) && !identical(part, quote(expr = ))) {
-        expr[i] <- list(substitute_inputs(part, env))
+      if (!identical(expr[[i]], quote(expr = )) && !is.null(expr[[i]])) {
+        expr[i] <- list(substitute_inputs(expr[[i]], env))
       }
     }
   }

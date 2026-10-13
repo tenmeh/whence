@@ -104,7 +104,7 @@ identity_pass <- function(trace) {
   }
 
   data <- source
-  data[[id_col]] <- paste0("w", seq_len(nrow(source)))
+  data[[id_col]] <- paste0("w", seq_len(nrow(source)), recycle0 = TRUE)
   id_map <- NULL
   ids <- NULL
   stages <- trace$stage_list
@@ -125,6 +125,10 @@ identity_pass <- function(trace) {
     )
     if (is.null(step)) {
       return(lost_identity(verb))
+    }
+    expected_n <- trace$stages$n[[i + 1L]]
+    if (!is.na(expected_n) && !identical(row_count(step$data), expected_n)) {
+      return(lost_identity(verb, paste0("the hidden id changed the result of ", verb, "()")))
     }
     data <- step$data
     id_map <- step$id_map
@@ -207,7 +211,7 @@ replay_aggregate <- function(stage, verb, data, env, id_map) {
   }
 
   new_map <- lapply(groups, resolve_ids, id_map = id_map)
-  out[[id_col]] <- paste0("w", seq_len(nrow(out)))
+  out[[id_col]] <- paste0("w", seq_len(nrow(out)), recycle0 = TRUE)
   list(data = out, id_map = new_map, ids = NULL)
 }
 
@@ -227,11 +231,14 @@ ids_by_key <- function(data, out) {
   if (length(keys) == 0) {
     return(list(ids))
   }
-  key_of <- function(df) {
-    cols <- lapply(df[keys], function(col) as.character(col))
-    do.call(paste, c(cols, sep = "\037"))
-  }
-  index <- match(key_of(data), key_of(out))
+  codes <- lapply(keys, function(key) {
+    values <- c(data[[key]], out[[key]])
+    match(values, unique(values))
+  })
+  combined <- do.call(paste, c(codes, sep = ":"))
+  input_keys <- combined[seq_len(nrow(data))]
+  output_keys <- combined[nrow(data) + seq_len(nrow(out))]
+  index <- match(input_keys, output_keys)
   unname(split(ids, factor(index, levels = seq_len(nrow(out)))))
 }
 

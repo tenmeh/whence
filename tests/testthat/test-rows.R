@@ -210,3 +210,52 @@ test_that("rows are unavailable for a pipeline that was not traced", {
   expect_null(rows)
   expect_match(rows_unavailable_reason(tr), "not traced")
 })
+test_that("hidden id predicate drift loses attribution with a named warning", {
+  local_dplyr()
+  d <- data.frame(x = c("yes", "no"))
+  tr <- whence_trace(d |> filter(if_all(where(is.character), ~ .x == "yes")) |> summarise(n = n()))
+  expect_identical(whence_value(tr), 1L)
+  expect_warning(rows <- whence_rows(tr), "hidden id changed the result of filter\\(\\)")
+  expect_null(rows)
+})
+
+test_that("count keys distinguish missing values and literal NA", {
+  local_dplyr()
+  d <- data.frame(g = c(NA_character_, "NA"))
+  tr <- whence_trace(d |> count(g) |> filter(is.na(g)) |> pull(n))
+  expect_identical(whence_value(tr), 1L)
+  expect_identical(whence_rows(tr), d[1, , drop = FALSE])
+})
+
+test_that("count keys distinguish embedded separators", {
+  local_dplyr()
+  d <- data.frame(a = c("a\037b", "a"), b = c("c", "b\037c"))
+  tr <- whence_trace(d |> count(a, b) |> filter(a == "a") |> pull(n))
+  expect_identical(whence_rows(tr), d[2, , drop = FALSE])
+})
+
+test_that("row replay uses frozen input values", {
+  local_dplyr()
+  d <- data.frame(x = 1:3)
+  input <- list(k = 1)
+  tr <- whence_trace(d |> filter(x == input$k) |> summarise(z = sum(x)))
+  input$k <- 3
+  expect_identical(whence_rows(tr), d[1, , drop = FALSE])
+})
+
+test_that("row replay detects changed counts from live variables", {
+  local_dplyr()
+  d <- data.frame(x = 1:3)
+  k <- 1
+  tr <- whence_trace(d |> filter(x > k) |> summarise(z = sum(x)))
+  k <- 3
+  expect_warning(rows <- whence_rows(tr), class = "whence_rows_unavailable")
+  expect_null(rows)
+})
+
+test_that("empty sources and empty aggregates keep zero ids", {
+  local_dplyr()
+  d <- data.frame(x = integer())
+  expect_identical(whence_rows(whence_trace(d |> summarise(n = n()))), d)
+  expect_identical(whence_rows(whence_trace(d |> count(x) |> summarise(n = n()))), d)
+})

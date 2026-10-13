@@ -19,3 +19,6 @@ docs/
 
 # Tooling
 .claude/
+
+# Scratch space for R temp files in a sandboxed run
+.tmp/

@@ -66,6 +66,15 @@ trace_expr <- function(expr, env) {
     env <- rlang::quo_get_env(expr)
     expr <- rlang::quo_get_expr(expr)
   }
+  while (is.call(expr) && identical(expr[[1]], quote(`{`)) && length(expr) > 1) {
+    if (length(expr) > 2) {
+      env <- new.env(parent = env)
+      for (i in seq.int(2L, length(expr) - 1L)) {
+        eval(expr[[i]], env)
+      }
+    }
+    expr <- expr[[length(expr)]]
+  }
   parts <- decompose_pipeline(expr)
 
   current <- eval(parts$source, env)
@@ -77,7 +86,10 @@ trace_expr <- function(expr, env) {
   seed <- save_seed(parts$stages)
 
   records <- list(source_record(parts$source, current, env))
-  for (stage in parts$stages) {
+  for (i in seq_along(parts$stages)) {
+    stage <- parts$stages[[i]]
+    stage$call <- substitute_inputs(stage$call, env)
+    parts$stages[[i]] <- stage
     before <- current
     current <- eval_stage(stage, current, env)
     check_not_lazy(current)
@@ -90,7 +102,7 @@ trace_expr <- function(expr, env) {
     list(
       value = value,
       stages = bind_records(records),
-      code = build_code(parts$source, parts$stages, env),
+      code = build_code(parts$source, parts$stages, env, seed),
       traced = is.data.frame(source_data) && length(parts$stages) > 0,
       expr = expr,
       source = parts$source,
@@ -167,7 +179,8 @@ stage_record <- function(stage, before, after, env) {
   if (kind %in% c("group_by", "ungroup")) {
     # A metadata step. It is shown only when it changes the groups.
     delta <- NA_integer_
-    shown <- group_count(before) != group_count(after)
+    shown <- group_count(before) != group_count(after) ||
+      !identical(group_names(before), group_names(after))
   }
   if (kind == "pull") {
     shown <- FALSE

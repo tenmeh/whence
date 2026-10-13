@@ -54,6 +54,7 @@
   function renderValue(el, data) {
     var id = el.id;
     var state = stateOf(id);
+    var restoreFocus = state.panel && state.panel.contains(document.activeElement);
     closePanel(id, false);
     state.data = data;
 
@@ -88,6 +89,9 @@
 
     slot.appendChild(value);
     slot.appendChild(make("span", { id: hintId, class: "whence-sr" }, HINT));
+    if (restoreFocus) {
+      value.focus();
+    }
   }
 
   function triggerOf(id) {
@@ -202,7 +206,7 @@
     var copy = make("button", { type: "button", class: "whence-copy btn btn-sm btn-outline-secondary" }, "Copy");
     var status = make("span", { class: "whence-sr", role: "status" });
     copy.addEventListener("click", function () {
-      copyText(data.code, function (ok) {
+      copyText(data.code, copy, function (ok) {
         status.textContent = ok ? "Code copied." : "Could not copy the code.";
         copy.textContent = ok ? "Copied" : "Copy";
       });
@@ -228,7 +232,12 @@
         "View the rows"
       );
       button.addEventListener("click", function () {
-        button.disabled = true;
+        // aria-disabled and not disabled: a disabled button loses the focus
+        // to the page, outside the dialog. showRows() moves the focus on.
+        if (button.getAttribute("aria-disabled") === "true") {
+          return;
+        }
+        button.setAttribute("aria-disabled", "true");
         button.textContent = "Loading the rows...";
         region.setAttribute("aria-busy", "true");
         Shiny.setInputValue(id + "_whence_rows", { at: Date.now() }, { priority: "event" });
@@ -312,22 +321,22 @@
     }
   }
 
-  function copyText(text, done) {
+  function copyText(text, button, done) {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(
         function () {
           done(true);
         },
         function () {
-          done(fallbackCopy(text));
+          done(fallbackCopy(text, button));
         }
       );
       return;
     }
-    done(fallbackCopy(text));
+    done(fallbackCopy(text, button));
   }
 
-  function fallbackCopy(text) {
+  function fallbackCopy(text, button) {
     var area = make("textarea", { class: "whence-sr", "aria-hidden": "true" });
     area.value = text;
     document.body.appendChild(area);
@@ -339,6 +348,7 @@
       ok = false;
     }
     area.remove();
+    button.focus();
     return ok;
   }
 
@@ -352,6 +362,7 @@
     var panel = state.panel;
     var region = panel.querySelector(".whence-rows");
     var button = panel.querySelector(".whence-rows-button");
+    var restoreFocus = button && document.activeElement === button;
     if (button) {
       button.remove();
     }
@@ -359,7 +370,11 @@
     region.textContent = "";
 
     if (!message.ok) {
-      region.appendChild(make("p", { class: "whence-rows-note" }, message.message));
+      var note = make("p", { class: "whence-rows-note", tabindex: "-1" }, message.message);
+      region.appendChild(note);
+      if (restoreFocus) {
+        note.focus();
+      }
       return;
     }
 
@@ -368,7 +383,11 @@
     if (message.shown < message.total) {
       heading += " (the first " + message.shownText + " are shown)";
     }
-    region.appendChild(make("h3", { class: "whence-section" }, heading));
+    var title = make("h3", { class: "whence-section", tabindex: "-1" }, heading);
+    region.appendChild(title);
+    if (restoreFocus) {
+      title.focus();
+    }
     var table = make("div", { class: "whence-rows-content" });
     region.appendChild(table);
 

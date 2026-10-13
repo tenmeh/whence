@@ -197,7 +197,7 @@ remember_trace <- function(session, name, trace) {
 
 #' Run the identity pass and send the rows to the browser
 #' @noRd
-send_rows <- function(session, name, trace) {
+send_rows <- function(session, name, trace, has_reactable = requireNamespace("reactable", quietly = TRUE)) {
   result <- tryCatch(
     identity_pass(trace),
     error = function(e) {
@@ -210,10 +210,11 @@ send_rows <- function(session, name, trace) {
   } else {
     rows <- result$rows
     total <- nrow(rows)
-    if (total > max_rows_sent) {
-      rows <- rows[seq_len(max_rows_sent), , drop = FALSE]
+    cap <- rows_cap(has_reactable)
+    if (total > cap) {
+      rows <- rows[seq_len(cap), , drop = FALSE]
     }
-    content <- rows_content(rows)
+    content <- rows_content(rows, has_reactable)
     message <- list(
       id = name,
       ok = TRUE,
@@ -235,9 +236,9 @@ send_rows <- function(session, name, trace) {
 #' 'reactable' gives a table with pages and a search box. Without it the
 #' rows are a plain HTML table.
 #' @noRd
-rows_content <- function(rows) {
+rows_content <- function(rows, has_reactable = requireNamespace("reactable", quietly = TRUE)) {
   rows <- as.data.frame(rows)
-  table <- if (requireNamespace("reactable", quietly = TRUE)) {
+  table <- if (has_reactable) {
     reactable::reactable(
       rows,
       compact = TRUE,
@@ -259,8 +260,14 @@ rows_content <- function(rows) {
 
 
 #' @noRd
+rows_cap <- function(has_reactable) {
+  if (has_reactable) max_rows_sent else 200L
+}
+
+
+#' @noRd
 plain_table <- function(rows) {
-  shown <- utils::head(rows, 200)
+  shown <- utils::head(rows, rows_cap(FALSE))
   cells <- lapply(shown, function(col) format(col, trim = TRUE))
   htmltools::tags$div(
     class = "whence-rows-table",
