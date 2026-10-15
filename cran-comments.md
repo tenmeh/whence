@@ -10,6 +10,10 @@ This is a new submission. The package has not been on CRAN before.
   built from a clean export of the commit, with `_R_CHECK_CRAN_INCOMING_=TRUE`,
   `_R_CHECK_CRAN_INCOMING_REMOTE_=TRUE`, the PDF manual, and pandoc. Run once
   without `NOT_CRAN` and once with it.
+* win-builder: Windows Server 2022, R-devel (2026-10-14 r90673 ucrt),
+  Status 1 NOTE (New submission). This run was of an earlier commit of 0.1.0;
+  the final commit only adds fixes, and was checked with R-devel on the
+  Ubuntu job below.
 * GitHub Actions with `--as-cran`: macOS (release), Windows (release),
   Ubuntu (devel, release, oldrel-1 to oldrel-4, and R 4.1).
 
@@ -24,9 +28,9 @@ The only note is the standard first-submission note.
 
 ## Notes for the reviewer
 
-* The examples of `whenceOutput()`, `whenceTableOutput()` and
-  `whencePlotOutput()` start a 'shiny' app, so they are wrapped in
-  `if (interactive())`. The parts that need no app run in the examples: each
+* The examples of `whenceOutput()`, `whenceTableOutput()`,
+  `whencePlotOutput()` and `whence_opened()` start a 'shiny' app, so they are
+  wrapped in `if (interactive())`. The parts that need no app run in the examples: each
   output function, and the whole engine (`whence_trace()`, `whence_table()`,
   `whence_group()`, `whence_rows()`), which works in the console.
 * The tests that start a headless browser (with 'shinytest2') call
