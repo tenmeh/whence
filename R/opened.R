@@ -22,7 +22,7 @@ opened_input <- ".whence_opened"
 #'   [whencePlotOutput()]. `NULL` for [whenceOutput()], and for the panel of a
 #'   whole table.
 #' * `data`: that row of the table, as a data frame with one row. For
-#'   [whenceOutput()], the value.
+#'   [whenceOutput()], the value. `NULL` for the panel of a whole table.
 #'
 #' Only one panel is open at a time.
 #'
@@ -60,13 +60,17 @@ whence_opened <- function(outputId, session = shiny::getDefaultReactiveDomain())
   if (is.null(session)) {
     stop("`whence_opened()` must be called in a 'shiny' server function.", call. = FALSE)
   }
-  # In a module, the output is named with the namespace of the module. At the
-  # root it is named as given. (The root session of testServer() adds a
-  # prefix in ns() that its outputs do not have, so ns() is not used there.)
-  full_id <- if (inherits(session, "session_proxy")) session$ns(outputId) else outputId
+  namespaced <- if (is.function(session$ns)) session$ns(outputId) else outputId
   root <- root_session(session)
 
   shiny::reactive({
+    # In a module the output is named with the namespace, and at the root as
+    # given. The name that has a trace is the one that is used. (The root
+    # session of testServer() adds a prefix in ns() that its outputs do not
+    # have, so the rule cannot be ns() alone.)
+    traces <- root$userData$.whence_traces
+    named <- !is.null(traces) && exists(namespaced, envir = traces, inherits = FALSE)
+    full_id <- if (named) namespaced else outputId
     state <- root$input[[opened_input]]
     if (!is.list(state) || !identical(state$id, full_id) || !isTRUE(state$open)) {
       return(NULL)

@@ -544,3 +544,20 @@ test_that("a click on a bar of a plot opens the panel of its row", {
   )
   expect_no_shiny_errors(app)
 })
+
+test_that("a plot that renders again closes its open panel", {
+  skip_on_cran()
+  local_dplyr()
+  skip_if_not_installed("ggplot2")
+  app <- local_app_driver(app_path(), name = "plot-again")
+  app$wait_for_js("document.querySelector('#plot_region img') !== null", timeout = 20000)
+  app$wait_for_js("document.querySelector('#plot_region-whence-table tbody tr') !== null", timeout = 20000)
+
+  app$run_js("document.querySelector('#plot_region-whence-table .whence-value').click()")
+  app$wait_for_js("document.querySelector('.whence-panel .whence-summary') !== null", timeout = 10000)
+  app$set_inputs(plot_from = 2022)
+  app$wait_for_js("document.querySelector('.whence-panel') === null", timeout = 10000)
+
+  expect_identical(js(app, "document.querySelector('.whence-backdrop') === null"), TRUE)
+  expect_no_shiny_errors(app)
+})

@@ -4,16 +4,17 @@
 \alias{whence_group}
 \title{Explain one row of a summary table}
 \usage{
-whence_group(table, row = NULL, ...)
+whence_group(table, ..., row = NULL)
 }
 \arguments{
 \item{table}{A \code{whence_table} from \code{\link[=whence_table]{whence_table()}}.}
 
+\item{...}{The values of the group columns of the row, by name, such as
+\code{region = "APAC"}. They must find exactly one row. A single number
+without a name is the number of the row.}
+
 \item{row}{The number of a row of the table. Give \code{row}, or the group
 values in \code{...}.}
-
-\item{...}{The values of the group columns of the row, by name, such as
-\code{region = "APAC"}. They must find exactly one row.}
 }
 \value{
 A \code{whence_group} object, which is also a \code{whence_trace}. Its value
