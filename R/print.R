@@ -69,6 +69,9 @@ format.whence_trace <- function(x, ...) {
       paste0(format_signed(d), " rows", if (nzchar(pct[[i]])) paste0(" (", pct[[i]], ")") else "")
     }, "")
     label <- ifelse(stages$kind == "source", stages$label, paste("->", stages$label))
+    # The number of each step, as whence_rows(step = ) takes it. A hidden
+    # step keeps its number, so the numbers can have gaps.
+    step_text <- formatC(stages$step, width = max(nchar(stages$step)))
     width_label <- max(nchar(label))
     width_n <- max(nchar(n_text))
     lines <- c(
@@ -76,7 +79,7 @@ format.whence_trace <- function(x, ...) {
       sub(
         "\\s+$", "",
         paste0(
-          "  ", formatC(label, width = -width_label), "  ",
+          "  ", step_text, " ", formatC(label, width = -width_label), "  ",
           formatC(n_text, width = width_n), "  ", delta_text
         )
       )

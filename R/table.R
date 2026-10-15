@@ -65,7 +65,10 @@ whence_table <- function(expr, env = parent.frame()) {
 #' that keeps this row, so it gives the row as the table has it.
 #'
 #' @param table A `whence_table` from [whence_table()].
-#' @param row The number of a row of the table.
+#' @param row The number of a row of the table. Give `row`, or the group
+#'   values in `...`.
+#' @param ... The values of the group columns of the row, by name, such as
+#'   `region = "APAC"`. They must find exactly one row.
 #'
 #' @return A `whence_group` object, which is also a `whence_trace`. Its value
 #'   is the row, as a data frame with one row.
@@ -80,14 +83,13 @@ whence_table <- function(expr, env = parent.frame()) {
 #' six <- whence_group(by_cyl, 2)
 #' six
 #' whence_rows(six)
+#'
+#' # The same row, by its group
+#' whence_group(by_cyl, cyl = 6)
 #' @export
-whence_group <- function(table, row) {
+whence_group <- function(table, row = NULL, ...) {
   if (!inherits(table, "whence_table")) {
     stop("`table` must be a `whence_table` from `whence_table()`, not ", class(table)[1], ".", call. = FALSE)
-  }
-  n_rows <- nrow(table$value)
-  if (!(is.numeric(row) && length(row) == 1 && !is.na(row) && row == round(row) && row >= 1 && row <= n_rows)) {
-    stop("`row` must be a whole number from 1 to ", n_rows, ".", call. = FALSE)
   }
   if (is.null(table$keys)) {
     stop(
@@ -95,6 +97,24 @@ whence_group <- function(table, row) {
       "columns, or the table does not keep them.",
       call. = FALSE
     )
+  }
+  values <- list(...)
+  if (length(values) > 0) {
+    if (!is.null(row)) {
+      stop("Give `row` or the group values in `...`, not both.", call. = FALSE)
+    }
+    row <- row_of_group(table, values)
+  }
+  if (is.null(row)) {
+    stop(
+      "Give the number of a row, or its group values, such as ",
+      "`", table$keys[[1]], " = ", deparse_one(table$value[[table$keys[[1]]]][[1]]), "`.",
+      call. = FALSE
+    )
+  }
+  n_rows <- nrow(table$value)
+  if (!(is.numeric(row) && length(row) == 1 && !is.na(row) && row == round(row) && row >= 1 && row <= n_rows)) {
+    stop("`row` must be a whole number from 1 to ", n_rows, ".", call. = FALSE)
   }
   row <- as.integer(row)
 
@@ -113,6 +133,50 @@ whence_group <- function(table, row) {
     ),
     class = c("whence_group", "whence_trace")
   )
+}
+
+
+#' The number of the row whose group columns have these values
+#'
+#' Each value is compared as text, and `NA` matches `NA`. The values must
+#' name group columns, and they must find exactly one row.
+#' @noRd
+row_of_group <- function(table, values) {
+  given <- names(values)
+  if (is.null(given) || any(!nzchar(given))) {
+    stop("The group values in `...` must be named, such as `", table$keys[[1]], " = ...`.", call. = FALSE)
+  }
+  unknown <- setdiff(given, table$keys)
+  if (length(unknown) > 0) {
+    stop(
+      "`...` names columns that are not group columns: ", paste0("`", unknown, "`", collapse = ", "),
+      ". The group columns are ", paste0("`", table$keys, "`", collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  matches <- rep(TRUE, nrow(table$value))
+  for (key in given) {
+    value <- values[[key]]
+    if (length(value) != 1) {
+      stop("The value of `", key, "` in `...` must be a single value.", call. = FALSE)
+    }
+    column <- table$value[[key]]
+    same <- if (is.na(value)) is.na(column) else !is.na(column) & as.character(column) == as.character(value)
+    matches <- matches & same
+  }
+  hit <- which(matches)
+  described <- paste(paste(given, "=", vapply(values, deparse_one, "")), collapse = ", ")
+  if (length(hit) == 0) {
+    stop("No row of the table has ", described, ".", call. = FALSE)
+  }
+  if (length(hit) > 1) {
+    stop(
+      length(hit), " rows of the table have ", described, ". Name more group columns: ",
+      paste0("`", setdiff(table$keys, given), "`", collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  hit
 }
 
 

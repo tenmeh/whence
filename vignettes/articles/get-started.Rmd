@@ -118,7 +118,7 @@ whence_rows(trace)
 
 Each count of removed rows in the waterfall has its percentage, and in the
 panel it is a button that shows those rows. In the console, give the step
-to `whence_rows()`. The steps are numbered as in `as.data.frame()`:
+to `whence_rows()`. `print()` shows the number of each step:
 
 ```{r, eval = has_dplyr}
 whence_rows(trace, step = 2)
@@ -156,10 +156,13 @@ by_cyl <- whence_table(
     summarise(cars = n(), mpg = mean(mpg)) |>
     mutate(share = cars / sum(cars))
 )
-six <- whence_group(by_cyl, 2)
+six <- whence_group(by_cyl, cyl = 6)
 six
 whence_rows(six, step = 1)
 ```
+
+A row can be found by its number, as in `whence_group(by_cyl, 2)`, or by
+its group values, as above.
 
 The code of the row keeps `share` right: it is the code of the table, and a
 last `filter()` that keeps the row.
@@ -168,8 +171,8 @@ last `filter()` that keeps the row.
 
 `whencePlotOutput()` and `renderWhencePlot()` draw a 'ggplot2' plot of a
 summary. A click on a bar or a point opens the panel of its row. The `x`
-aesthetic (and the `y` aesthetic, for points) must be columns of the
-summary. Under the plot, "Show the data" gives the table, so a keyboard
+aesthetic can be computed from the columns of the summary, as in
+`aes(reorder(cyl, mpg), mpg)`. Under the plot, "Show the data" gives the table, so a keyboard
 user can open each panel too.
 
 ```{r, eval = FALSE}
@@ -180,6 +183,25 @@ output$by_cyl_plot <- renderWhencePlot(
     summarise(mpg = mean(mpg)),
   plot = function(data) ggplot(data, aes(cyl, mpg)) + geom_col()
 )
+```
+
+## Follow the viewer
+
+`whence_opened()` gives a reactive with the panel that the viewer has open.
+While a row of a table is open, it gives the number of the row and the row
+itself, so the app can show more about it:
+
+```{r, eval = FALSE}
+server <- function(input, output, session) {
+  output$by_cyl <- renderWhenceTable(
+    mtcars |> group_by(cyl) |> summarise(cars = n())
+  )
+  opened <- whence_opened("by_cyl")
+  output$detail <- renderText({
+    req(opened())
+    paste("Looking at the cars with", opened()$data$cyl, "cylinders.")
+  })
+}
 ```
 
 ## Summaries are not attrition

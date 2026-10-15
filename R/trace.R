@@ -440,7 +440,8 @@ extract_scalar <- function(x) {
     }
     stop(
       "whence can explain a single value. The pipeline returned ",
-      format_count(nrow(x)), " rows and ", ncol(x), " columns.",
+      format_count(nrow(x)), " rows and ", ncol(x), " columns. ",
+      "For a table, use `whence_table()`, or `renderWhenceTable()` in 'shiny'.",
       call. = FALSE
     )
   }

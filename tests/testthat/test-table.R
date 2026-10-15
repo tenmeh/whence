@@ -134,3 +134,37 @@ test_that("a group prints its label and its waterfall", {
   expect_identical(text[1], "<whence_group> region = EMEA")
   expect_match(text, "-4 rows (40%)", fixed = TRUE, all = FALSE)
 })
+
+test_that("a group can be found by its values", {
+  local_dplyr()
+  sales <- make_sales()
+  tab <- whence_table(sales |> count(region, customer))
+
+  bolt <- whence_group(tab, region = "EMEA", customer = "Bolt")
+  expect_identical(bolt$row, 6L)
+  expect_identical(bolt$label, "region = EMEA, customer = Bolt")
+  expect_error(
+    whence_group(tab, region = "EMEA"),
+    "4 rows of the table have region = \"EMEA\". Name more group columns: `customer`.",
+    fixed = TRUE
+  )
+  expect_error(whence_group(tab, region = "MARS", customer = "Bolt"), "No row of the table has", fixed = TRUE)
+  expect_error(
+    whence_group(tab, area = "EMEA"),
+    "not group columns: `area`. The group columns are `region`, `customer`.",
+    fixed = TRUE
+  )
+  expect_error(whence_group(tab, 1, region = "EMEA"), "not both")
+  expect_error(whence_group(tab, "EMEA"), "`row` must be a whole number")
+  expect_error(whence_group(tab), "Give the number of a row, or its group values, such as `region = ", fixed = TRUE)
+  expect_error(whence_group(tab, region = c("APAC", "EMEA"), customer = "Bolt"), "must be a single value")
+})
+
+test_that("a group value of NA finds the NA group", {
+  local_dplyr()
+  d <- data.frame(g = c(NA, "NA", "NA"), x = 1:3)
+  tab <- whence_table(d |> count(g))
+
+  expect_identical(is.na(whence_value(whence_group(tab, g = NA))$g), TRUE)
+  expect_identical(whence_value(whence_group(tab, g = "NA"))$n, 2L)
+})

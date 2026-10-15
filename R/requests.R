@@ -138,7 +138,7 @@ answer_request <- function(session, id, trace, action, request, fail) {
   row <- request_row(request)
 
   if (identical(action, "point")) {
-    row <- clicked_row(trace$value, request$click)
+    row <- clicked_row(trace$value, request$click, trace$plot_values)
     if (is.na(row)) {
       return(fail("Click on a bar or a point of the plot."))
     }

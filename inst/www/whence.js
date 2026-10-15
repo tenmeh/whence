@@ -20,6 +20,9 @@
   // The one input for requests to the server. See request_input in requests.R.
   var REQUEST = ".whence_request";
 
+  // The input that tells the app which panel is open. See opened.R.
+  var OPENED = ".whence_opened";
+
   // The suffix of the click input of a whence plot. See output-plot.R.
   var CLICK_SUFFIX = "_whence_click";
 
@@ -41,6 +44,16 @@
       }
     });
     Shiny.setInputValue(REQUEST, value, { priority: "event" });
+  }
+
+  // Tell the app which panel is open, for whence_opened(). The panel does
+  // not wait for this.
+  function notifyOpened(id, row, open) {
+    var value = { id: id, open: open, at: Date.now() };
+    if (row !== null && row !== undefined) {
+      value.row = row;
+    }
+    Shiny.setInputValue(OPENED, value, { priority: "event" });
   }
 
   function make(tag, attrs, text) {
@@ -202,8 +215,12 @@
       fillPanel(message.id, null, message.message);
       return;
     }
+    var known = state.row !== null;
     state.row = message.row;
     fillPanel(message.id, message.panel);
+    if (!known) {
+      notifyOpened(message.id, state.row, true);
+    }
   }
 
   // --- A plot -----------------------------------------------------------
@@ -292,6 +309,11 @@
     }
     fillPanel(id, options.data);
     place(panel, state.trigger, options.anchor);
+    // The panel of a plot click does not know its row yet; onGroup() tells
+    // the app when it does.
+    if (!options.group || state.row !== null) {
+      notifyOpened(id, state.row, true);
+    }
 
     window.requestAnimationFrame(function () {
       panel.classList.add("whence-open");
@@ -372,7 +394,9 @@
     var list = make("dl", { class: "whence-waterfall" });
     (data.stages || []).forEach(function (stage) {
       var step = make("div", { class: "whence-step whence-kind-" + stage.kind });
-      step.appendChild(make("dt", null, stage.label));
+      // The number of the step, as whence_rows(step = ) takes it. CSS shows
+      // it before the label.
+      step.appendChild(make("dt", { "data-step": stage.step }, stage.label));
 
       var dd = make("dd");
       if (stage.nText !== undefined) {
@@ -542,6 +566,7 @@
     state.backdrop.remove();
     state.panel = null;
     state.backdrop = null;
+    notifyOpened(id, null, false);
 
     var trigger = state.trigger;
     state.trigger = null;
