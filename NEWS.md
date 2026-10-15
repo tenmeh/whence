@@ -1,6 +1,6 @@
-# whence 0.0.0.9000
+# whence 0.1.0
 
-* First version.
+* Initial CRAN submission.
 
 * `whenceOutput()` and `renderWhence()` show a value in 'shiny'. A click on
   the value opens a panel with the attrition waterfall and the reproduce

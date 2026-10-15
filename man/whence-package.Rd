@@ -8,7 +8,7 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Lets the viewer of a 'shiny' dashboard click a number and see where it came from. The pipeline that makes the number is split into its steps. Each step is run in turn, and the number of rows after each step is recorded. The result is an attrition waterfall that shows how many rows each step removed, together with code that reproduces the number. The steps are found from the expression alone, so the pipeline does not need to be rewritten. The rows that contribute to the number are found only when the viewer asks for them.
+Lets the viewer of a 'shiny' dashboard click a number, a row of a summary table or a bar of a 'ggplot2' plot, and see where it came from. The pipeline that makes the result is split into its steps. Each step is run in turn, and the number of rows after each step is recorded. The result is an attrition waterfall that shows how many rows each step removed, and what share of the rows that was, together with code that reproduces the result. The steps are found from the expression alone, so the pipeline does not need to be rewritten. The rows that contribute to a result, and the rows that a step removed, are found only when the viewer asks for them.
 }
 \seealso{
 Useful links:
