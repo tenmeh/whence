@@ -309,3 +309,22 @@ test_that("regrouping with the same count is shown", {
   expect_identical(tr$stages$shown[3], TRUE)
   expect_identical(tr$stages$label[3], "grouped by b")
 })
+
+test_that("each step has its number and the percentage of rows it removed", {
+  local_dplyr()
+  sales <- make_sales()
+
+  stages <- as.data.frame(whence_trace(
+    sales |> filter(region == "APAC") |> filter(year >= 2023) |> summarise(n = n())
+  ))
+
+  expect_identical(stages$step, 0:3)
+  expect_equal(stages$percent, c(NA, -50, -40, NA))
+})
+
+test_that("percentages are rounded, a small one is <1%, and 100% means all", {
+  expect_identical(
+    format_percent(c(-50, -0.4, NA, -99.6, 12.5, -100)),
+    c("50%", "<1%", "", "99%", "12%", "100%")
+  )
+})

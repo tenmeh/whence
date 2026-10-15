@@ -14,24 +14,26 @@ managers <- data.frame(region = c("APAC", "EMEA"), manager = c("Kim", "Lou"))
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
-  tags$p(explainableOutput("total", label = "Total revenue")),
-  tags$p(explainableOutput("customers", label = "Customers")),
-  tags$div(id = "joined-wrap", explainableOutput("joined", label = "Joined")),
+  tags$p(whenceOutput("total", label = "Total revenue")),
+  tags$p(whenceOutput("customers", label = "Customers")),
+  tags$div(id = "joined-wrap", whenceOutput("joined", label = "Joined")),
   uiOutput("dynamic"),
+  whenceTableOutput("by_region", label = "Revenue by region"),
+  whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px"),
   actionButton("drop", "Remove the joined output"),
   actionButton("rebuild", "Rebuild the dynamic output"),
   tags$button(id = "after", type = "button", "A control after the outputs")
 )
 
 server <- function(input, output, session) {
-  output$total <- renderExplainable(
+  output$total <- renderWhence(
     sales |>
       filter(region == input$region) |>
       filter(year >= 2023) |>
       summarise(total = sum(revenue)),
     format = function(x) paste0("$", format(x, big.mark = ","))
   )
-  output$customers <- renderExplainable(
+  output$customers <- renderWhence(
     sales |>
       filter(region == input$region) |>
       distinct(customer) |>
@@ -40,18 +42,35 @@ server <- function(input, output, session) {
   # renderUI() makes the output again, with the same id, at each rebuild.
   output$dynamic <- renderUI({
     input$rebuild
-    tags$p(explainableOutput("dynamic_total", label = "Dynamic"))
+    tags$p(whenceOutput("dynamic_total", label = "Dynamic"))
   })
-  output$dynamic_total <- renderExplainable(
+  output$dynamic_total <- renderWhence(
     sales |> filter(region == "EMEA") |> summarise(n = n())
   )
   observeEvent(input$drop, removeUI("#joined-wrap"))
+
+  by_region <- quote(
+    sales |>
+      filter(year >= 2023) |>
+      group_by(region) |>
+      summarise(total = sum(revenue))
+  )
+  output$by_region <- renderWhenceTable(
+    by_region,
+    format = list(total = function(x) paste0("$", format(x, big.mark = ","))),
+    quoted = TRUE
+  )
+  output$plot_region <- renderWhencePlot(
+    by_region,
+    plot = function(data) ggplot2::ggplot(data, ggplot2::aes(region, total)) + ggplot2::geom_col(),
+    quoted = TRUE
+  )
 
   # The traces that the server holds, for the clean-up tests.
   exportTestValues(traces = sort(ls(session$userData$.whence_traces)))
 
   # A join ends the chain, so the panel says where it stopped.
-  output$joined <- renderExplainable(
+  output$joined <- renderWhence(
     sales |>
       filter(region == input$region) |>
       inner_join(managers, by = "region") |>

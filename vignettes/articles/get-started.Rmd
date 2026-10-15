@@ -27,8 +27,8 @@ pak::pak("tenmeh/whence")
 
 ## In a Shiny app
 
-Replace `textOutput()` and `renderText()` with `explainableOutput()` and
-`renderExplainable()`. Give the render a pipeline that ends in one value. You
+Replace `textOutput()` and `renderText()` with `whenceOutput()` and
+`renderWhence()`. Give the render a pipeline that ends in one value. You
 do not need to change the pipeline.
 
 ```{r, eval = FALSE}
@@ -38,11 +38,11 @@ library(whence)
 
 ui <- fluidPage(
   selectInput("cyl", "Cylinders", c(4, 6, 8)),
-  explainableOutput("mean_mpg", label = "Mean mpg")
+  whenceOutput("mean_mpg", label = "Mean mpg")
 )
 
 server <- function(input, output, session) {
-  output$mean_mpg <- renderExplainable(
+  output$mean_mpg <- renderWhence(
     mtcars |>
       filter(cyl == input$cyl) |>
       filter(hp < 150) |>
@@ -67,11 +67,11 @@ The [live demo](live-demo.html) shows all of this in your browser.
 
 ## Show a value as you want
 
-`format` in `renderExplainable()` is a function that turns the value into
+`format` in `renderWhence()` is a function that turns the value into
 the text to show. A formatter of 'scales' works:
 
 ```{r, eval = FALSE}
-output$revenue <- renderExplainable(
+output$revenue <- renderWhence(
   sales |> filter(region == input$region) |> summarise(total = sum(revenue)),
   format = scales::label_dollar()
 )
@@ -112,6 +112,74 @@ The value, the code, and the rows that make the value:
 whence_value(trace)
 cat(whence_code(trace))
 whence_rows(trace)
+```
+
+## Which rows did a step remove?
+
+Each count of removed rows in the waterfall has its percentage, and in the
+panel it is a button that shows those rows. In the console, give the step
+to `whence_rows()`. The steps are numbered as in `as.data.frame()`:
+
+```{r, eval = has_dplyr}
+whence_rows(trace, step = 2)
+```
+
+## Tables
+
+A pipeline that ends in a summary gives a table. `whenceTableOutput()` and
+`renderWhenceTable()` show it, and the first cell of each row opens the
+panel of that row: the rows of its group at each step, the code of the row,
+and its rows.
+
+```{r, eval = FALSE}
+ui <- fluidPage(whenceTableOutput("by_cyl", label = "Cars by cylinders"))
+
+server <- function(input, output, session) {
+  output$by_cyl <- renderWhenceTable(
+    mtcars |>
+      filter(hp > 90) |>
+      group_by(cyl) |>
+      summarise(cars = n(), mpg = mean(mpg)),
+    format = list(mpg = function(x) format(round(x, 1)))
+  )
+}
+```
+
+In the console, `whence_table()` traces the table, and `whence_group()`
+explains one row:
+
+```{r, eval = has_dplyr}
+by_cyl <- whence_table(
+  mtcars |>
+    filter(hp > 90) |>
+    group_by(cyl) |>
+    summarise(cars = n(), mpg = mean(mpg)) |>
+    mutate(share = cars / sum(cars))
+)
+six <- whence_group(by_cyl, 2)
+six
+whence_rows(six, step = 1)
+```
+
+The code of the row keeps `share` right: it is the code of the table, and a
+last `filter()` that keeps the row.
+
+## Plots
+
+`whencePlotOutput()` and `renderWhencePlot()` draw a 'ggplot2' plot of a
+summary. A click on a bar or a point opens the panel of its row. The `x`
+aesthetic (and the `y` aesthetic, for points) must be columns of the
+summary. Under the plot, "Show the data" gives the table, so a keyboard
+user can open each panel too.
+
+```{r, eval = FALSE}
+output$by_cyl_plot <- renderWhencePlot(
+  mtcars |>
+    filter(hp > 90) |>
+    group_by(cyl = factor(cyl)) |>
+    summarise(mpg = mean(mpg)),
+  plot = function(data) ggplot(data, aes(cyl, mpg)) + geom_col()
+)
 ```
 
 ## Summaries are not attrition
@@ -175,4 +243,6 @@ rows <- whence_rows(trace)
 * **Window functions** are counted correctly, but their row attribution has
   no clear meaning.
 * The verbs of 'data.table', 'arrow' and 'duckplyr' are not known.
-* One value for each output. Tables and plots are not explained yet.
+* A table or a plot is explained row by row when it is the result of a
+  summary step that keeps its group columns. A plot must be a 'ggplot2'
+  plot of that table.

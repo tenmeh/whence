@@ -26,6 +26,7 @@ Imports:
     utils
 Suggests:
     dplyr,
+    ggplot2,
     reactable,
     shinytest2,
     testthat (>= 3.0.0),

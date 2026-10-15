@@ -1,7 +1,7 @@
 # --- The UI function ---------------------------------------------------------
 
-test_that("explainableOutput() gives the output element with its dependency", {
-  tag <- explainableOutput("total", label = "Total")
+test_that("whenceOutput() gives the output element with its dependency", {
+  tag <- whenceOutput("total", label = "Total")
   html <- as.character(tag)
   deps <- htmltools::findDependencies(tag)
 
@@ -11,23 +11,23 @@ test_that("explainableOutput() gives the output element with its dependency", {
   expect_identical(deps[[1]]$name, "whence")
 })
 
-test_that("explainableOutput() checks its arguments", {
-  expect_error(explainableOutput(1), "`outputId` must be")
-  expect_error(explainableOutput("x", label = 1), "`label` must be")
+test_that("whenceOutput() checks its arguments", {
+  expect_error(whenceOutput(1), "`outputId` must be")
+  expect_error(whenceOutput("x", label = 1), "`label` must be")
 })
 
-test_that("renderExplainable() checks its arguments", {
-  expect_error(renderExplainable(1, format = "%.2f"), "`format` must be a function or `NULL`, not character")
-  expect_error(renderExplainable(1, env = list()), "`env` must be an environment, not list")
-  expect_error(renderExplainable(quote(1), quoted = "yes"), "`quoted` must be `TRUE` or `FALSE`")
-  expect_error(renderExplainable(1, outputArgs = "label"), "`outputArgs` must be a list")
+test_that("renderWhence() checks its arguments", {
+  expect_error(renderWhence(1, format = "%.2f"), "`format` must be a function or `NULL`, not character")
+  expect_error(renderWhence(1, env = list()), "`env` must be an environment, not list")
+  expect_error(renderWhence(quote(1), quoted = "yes"), "`quoted` must be `TRUE` or `FALSE`")
+  expect_error(renderWhence(1, outputArgs = "label"), "`outputArgs` must be a list")
 })
 
-test_that("renderExplainable() passes outputArgs to the output function", {
-  render <- renderExplainable(1, outputArgs = list(label = "Total"))
+test_that("renderWhence() passes outputArgs to the output function", {
+  render <- renderWhence(1, outputArgs = list(label = "Total"))
 
   expect_identical(attr(render, "outputArgs"), list(label = "Total"))
-  expect_identical(attr(render, "outputFunc"), explainableOutput)
+  expect_identical(attr(render, "outputFunc"), whenceOutput)
 })
 
 # --- The payload ---------------------------------------------------------------
@@ -78,12 +78,12 @@ test_that("the default format puts a comma in each thousand", {
 
 # --- The server function ------------------------------------------------------
 
-test_that("renderExplainable() reads inputs and updates when they change", {
+test_that("renderWhence() reads inputs and updates when they change", {
   local_dplyr()
   sales <- make_sales()
 
   server <- function(input, output, session) {
-    output$total <- renderExplainable(
+    output$total <- renderWhence(
       sales |> filter(region == input$region) |> summarise(total = sum(revenue))
     )
   }
@@ -106,7 +106,7 @@ test_that("format runs on the server, and can read inputs", {
 
   server <- function(input, output, session) {
     input_symbol <<- function() input$symbol
-    output$total <- renderExplainable(
+    output$total <- renderWhence(
       sales |> summarise(total = sum(revenue)),
       format = currency
     )
@@ -124,7 +124,7 @@ test_that("two renders with the same output id keep their own format", {
   sales <- make_sales()
   make_server <- function(fmt) {
     function(input, output, session) {
-      output$total <- renderExplainable(sales |> summarise(n = n()), format = fmt)
+      output$total <- renderWhence(sales |> summarise(n = n()), format = fmt)
     }
   }
 
@@ -195,8 +195,8 @@ test_that("every output of a session shares one table of traces", {
   sales <- make_sales()
 
   server <- function(input, output, session) {
-    output$one <- renderExplainable(sales |> summarise(n = n()))
-    output$two <- renderExplainable(sales |> filter(region == "APAC") |> summarise(n = n()))
+    output$one <- renderWhence(sales |> summarise(n = n()))
+    output$two <- renderWhence(sales |> filter(region == "APAC") |> summarise(n = n()))
   }
 
   shiny::testServer(server, {
@@ -209,13 +209,13 @@ test_that("every output of a session shares one table of traces", {
   })
 })
 
-test_that("renderExplainable() accepts a quoted expression", {
+test_that("renderWhence() accepts a quoted expression", {
   local_dplyr()
   sales <- make_sales()
   expr <- quote(sales |> filter(region == "APAC") |> summarise(n = n()))
 
   server <- function(input, output, session) {
-    output$n <- renderExplainable(expr, quoted = TRUE)
+    output$n <- renderWhence(expr, quoted = TRUE)
   }
 
   shiny::testServer(server, {
@@ -272,7 +272,7 @@ test_that("a click opens the panel with no trip to the server", {
   )
   expect_identical(
     js(app, "Array.from(document.querySelectorAll('.whence-delta')).map(n => n.textContent)"),
-    list("\u221210 rows", "\u22124 rows")
+    list("\u221210 rows (50%)", "\u22124 rows (40%)")
   )
   expect_identical(js(app, "document.querySelector('.whence-panel').getAttribute('role')"), "dialog")
   expect_identical(js(app, "document.activeElement.classList.contains('whence-panel')"), TRUE)
@@ -467,4 +467,72 @@ test_that("fallback rows payload reports the rows actually shown", {
   expect_identical(payload$shownText, "200")
   expect_length(gregexpr("<td>", payload$html, fixed = TRUE)[[1]], 200L)
   expect_length(gregexpr("<td>", as.character(plain_table(d)), fixed = TRUE)[[1]], 200L)
+})
+
+test_that("a row of a table opens its own panel, and a removed count shows its rows", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "table")
+  app$wait_for_js("document.querySelector('#by_region .whence-table .whence-value') !== null", timeout = 20000)
+
+  expect_identical(
+    js(app, "Array.from(document.querySelectorAll('#by_region tbody tr')).map(r => r.textContent)"),
+    list("APAC$3,900", "EMEA$9,900")
+  )
+
+  app$run_js("document.querySelector('#by_region tbody .whence-value').focus()")
+  press(app, "Enter", keycode = 13)
+  app$wait_for_js("document.querySelector('.whence-panel .whence-summary') !== null")
+  expect_identical(js(app, "document.querySelector('.whence-panel .whence-summary').textContent"), "region = APAC")
+  expect_identical(
+    js(app, "Array.from(document.querySelectorAll('.whence-waterfall dd')).map(n => n.textContent)"),
+    list("10 rows", "6 rows\u22124 rows (40%)", "6 rows", "1 row")
+  )
+  expect_match(js(app, "document.querySelector('.whence-code').textContent"), 'filter(region == "APAC")', fixed = TRUE)
+
+  app$run_js("document.querySelector('.whence-delta-button').focus()")
+  press(app, "Enter", keycode = 13)
+  app$wait_for_js("document.querySelector('.whence-rows h3') !== null")
+  expect_identical(js(app, "document.querySelector('.whence-rows h3').textContent"), "4 rows removed by year >= 2023")
+  expect_identical(js(app, "document.activeElement.textContent"), "4 rows removed by year >= 2023")
+
+  press(app, "Escape", keycode = 27)
+  app$wait_for_js("document.querySelector('.whence-panel') === null")
+  expect_identical(js(app, "document.activeElement.textContent"), "APAC")
+  expect_no_shiny_errors(app)
+})
+
+test_that("a click on a bar of a plot opens the panel of its row", {
+  skip_on_cran()
+  local_dplyr()
+  skip_if_not_installed("ggplot2")
+  app <- local_app_driver(app_path(), name = "plot")
+  app$wait_for_js("document.querySelector('#plot_region img') !== null", timeout = 20000)
+  app$wait_for_js("document.querySelector('#plot_region-whence-table tbody tr') !== null", timeout = 20000)
+
+  # The bar of APAC is the left one, over the lower part of the plot. A
+  # mouse event goes to a point of the window, so the plot must be in view.
+  app$run_js("document.querySelector('#plot_region').scrollIntoView({block: 'center'})")
+  box <- js(app, "(function(){var r = document.querySelector('#plot_region img').getBoundingClientRect();
+    return {x: r.left + r.width * 0.33, y: r.top + r.height * 0.75};})()")
+  cdp <- app$get_chromote_session()
+  for (type in c("mousePressed", "mouseReleased")) {
+    cdp$Input$dispatchMouseEvent(type = type, x = box$x, y = box$y, button = "left", clickCount = 1)
+  }
+  app$wait_for_js("document.querySelector('.whence-panel .whence-summary') !== null", timeout = 10000)
+
+  expect_identical(js(app, "document.querySelector('.whence-panel .whence-summary').textContent"), "region = APAC")
+  expect_identical(
+    js(app, "document.querySelector('.whence-panel .whence-title').textContent"),
+    "Where this row came from"
+  )
+  expect_null(app$get_value(input = "plot_region_whence_click"))
+
+  press(app, "Escape", keycode = 27)
+  app$wait_for_js("document.querySelector('.whence-panel') === null")
+  expect_identical(
+    js(app, "document.querySelectorAll('#plot_region-whence-table .whence-table .whence-value').length"),
+    2L
+  )
+  expect_no_shiny_errors(app)
 })

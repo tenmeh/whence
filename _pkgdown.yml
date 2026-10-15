@@ -86,18 +86,30 @@ navbar:
 reference:
   - title: Explain a value in Shiny
     desc: >
-      The output and the render function. Use them in place of textOutput()
-      and renderText(). A click on the value opens the waterfall and the
-      reproduce code.
+      The output and the render function for a single value. Use them in
+      place of textOutput() and renderText(). A click on the value opens the
+      waterfall and the reproduce code.
     contents:
-      - explainableOutput
-      - renderExplainable
+      - whenceOutput
+      - renderWhence
+
+  - title: Explain a table or a plot in Shiny
+    desc: >
+      A summary table, or a ggplot of one. A click on a row, a bar or a point
+      opens the panel of that row of the summary.
+    contents:
+      - whenceTableOutput
+      - renderWhenceTable
+      - whencePlotOutput
+      - renderWhencePlot
 
   - title: The engine, with no Shiny
     desc: >
       Trace a pipeline from the console or a test, and read its parts.
     contents:
       - whence_trace
+      - whence_table
+      - whence_group
       - whence_value
       - whence_code
       - whence_rows

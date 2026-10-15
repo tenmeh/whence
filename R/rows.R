@@ -27,11 +27,17 @@ tracked_verbs <- c(
 )
 
 
-#' The rows that make the value
+#' The rows that make the value, or the rows that a step removed
 #'
-#' `whence_rows()` finds the rows of the source data that contribute to the
-#' value of a trace. For `sales |> filter(...) |> summarise(total = sum(x))`
-#' these are the rows of `sales` that the filters keep.
+#' `whence_rows()` finds rows of the source data. With no `step`, it gives the
+#' rows that contribute to the value: for
+#' `sales |> filter(...) |> summarise(total = sum(x))` these are the rows of
+#' `sales` that the filters keep. With `step = k`, it gives the rows that step
+#' `k` removed. The steps are numbered as in the `step` column of
+#' `as.data.frame(trace)`, where the source is step 0.
+#'
+#' For a group from [whence_group()], both are limited to the rows of that
+#' group.
 #'
 #' The function replays the pipeline with a hidden id column on a copy of
 #' the source. [whence_trace()] never does this, so the waterfall costs
@@ -40,32 +46,41 @@ tracked_verbs <- c(
 #' Some steps destroy the link between a row and the source:
 #' `distinct()`, `pivot_longer()`, `pivot_wider()`, and each step that is
 #' not a known verb. After such a step the function gives `NULL` with a
-#' warning that names the step. The waterfall of the trace is still
-#' complete, because it uses counts only.
+#' warning that names the step. The rows that an earlier step removed can
+#' still be found. The waterfall of the trace is always complete, because it
+#' uses counts only.
 #'
-#' @param trace A `whence_trace` from [whence_trace()].
+#' @param trace A `whence_trace` from [whence_trace()] or [whence_table()],
+#'   or a group from [whence_group()].
 #' @param n The largest number of rows to give, or `NULL` for all of them.
+#' @param step `NULL` for the rows that make the value, or the number of a
+#'   step for the rows that it removed.
 #'
-#' @return The contributing rows of the source data, in their original
-#'   order, with the columns of the source. `NULL`, with a warning of class
+#' @return Rows of the source data, in their original order, with the
+#'   columns of the source. `NULL`, with a warning of class
 #'   `whence_rows_unavailable`, when the rows cannot be found.
 #' @examplesIf requireNamespace("dplyr", quietly = TRUE)
 #' library(dplyr, warn.conflicts = FALSE)
 #'
 #' trace <- whence_trace(
 #'   mtcars |>
-#'     filter(cyl == 4, mpg > 30) |>
+#'     filter(cyl == 4) |>
+#'     filter(mpg > 30) |>
 #'     summarise(mean_hp = mean(hp))
 #' )
 #' whence_rows(trace)
+#'
+#' # The cars that the second filter removed
+#' whence_rows(trace, step = 2)
 #' @export
-whence_rows <- function(trace, n = NULL) {
+whence_rows <- function(trace, n = NULL, step = NULL) {
   check_trace(trace)
   if (!is.null(n) && !(is.numeric(n) && length(n) == 1 && !is.na(n) && n >= 0)) {
     stop("`n` must be a single number that is 0 or more, or `NULL`.", call. = FALSE)
   }
+  check_step(trace, step)
 
-  result <- identity_pass(trace)
+  result <- rows_query(trace, step)
   if (is.null(result$rows)) {
     warning(
       structure(
@@ -84,18 +99,112 @@ whence_rows <- function(trace, n = NULL) {
 }
 
 
-#' Replay the stages with the hidden id column
+#' Stop unless `step` is NULL or the number of a step of `trace`
+#' @noRd
+check_step <- function(trace, step) {
+  if (is.null(step)) {
+    return(invisible())
+  }
+  last <- nrow(trace$stages) - 1L
+  ok <- is.numeric(step) && length(step) == 1 && !is.na(step) && step == round(step) &&
+    step >= 1 && step <= last
+  if (!ok) {
+    if (last < 1) {
+      stop("`step` must be `NULL`: this pipeline has no steps.", call. = FALSE)
+    }
+    stop("`step` must be `NULL` or a whole number from 1 to ", last, ".", call. = FALSE)
+  }
+  invisible()
+}
+
+
+#' The rows for a trace or a group: all that make the value, or those that
+#' one step removed
+#'
+#' @return A list with `rows`, or `rows = NULL` with `verb` and `reason`.
+#' @noRd
+rows_query <- function(x, step = NULL) {
+  group <- if (inherits(x, "whence_group")) x$row else NULL
+  trace <- if (is.null(group)) x else x$table
+  replay <- x$replay %||% replay_trace(trace)
+  sources <- replay$sources
+  codes <- replay$codes
+
+  in_group <- function(s) {
+    if (is.null(group)) {
+      return(unlist(sources[[s]]))
+    }
+    if (is.null(codes[[s]])) {
+      return(NULL)
+    }
+    unlist(sources[[s]][codes[[s]] %in% group])
+  }
+
+  if (is.null(step)) {
+    if (!replay$ok) {
+      return(replay[c("rows", "verb", "reason")])
+    }
+    return(list(rows = source_rows(trace, in_group(length(sources)))))
+  }
+
+  if (length(sources) < step + 1L) {
+    return(replay[c("rows", "verb", "reason")])
+  }
+  before <- in_group(step)
+  after <- in_group(step + 1L)
+  if (!is.null(group) && (is.null(before) || is.null(after))) {
+    return(list(
+      rows = NULL,
+      verb = NA_character_,
+      reason = "Row attribution unavailable: the group columns do not exist at this step."
+    ))
+  }
+  list(rows = source_rows(trace, setdiff(before, after)))
+}
+
+
+#' The source rows that make the value, or why they cannot be found
 #'
 #' @return A list with `rows` (the source rows, or `NULL`), and when `rows`
 #'   is `NULL`, `verb` and `reason`.
 #' @noRd
 identity_pass <- function(trace) {
+  replay <- replay_trace(trace)
+  if (!replay$ok) {
+    return(replay[c("rows", "verb", "reason")])
+  }
+  last <- replay$sources[[length(replay$sources)]]
+  list(rows = source_rows(trace, unlist(last)))
+}
+
+
+#' Replay the stages with the hidden id column, and record each step
+#'
+#' After each step it records, for each row of the data, the source rows that
+#' it stands for (`sources`: an integer vector before a summary, a list after
+#' one), and, for a table, the row of the table that each row belongs to
+#' (`codes`). Element 1 is the source, element k + 1 is after step k. When the
+#' replay cannot go on, `ok` is `FALSE` and the steps before that point are
+#' still recorded.
+#' @noRd
+replay_trace <- function(trace) {
+  out <- list(ok = FALSE, rows = NULL, verb = NA_character_, reason = NULL, sources = list(), codes = list())
+  # The record grows in an environment, so that record() can add to it.
+  rec <- new.env(parent = emptyenv())
+  rec$sources <- list()
+  rec$codes <- list()
+  stop_with <- function(lost) {
+    out[c("verb", "reason")] <- lost[c("verb", "reason")]
+    out$sources <- rec$sources
+    out$codes <- rec$codes
+    out
+  }
   if (!trace$traced) {
-    return(lost_identity(NA_character_, "the pipeline was not traced"))
+    return(stop_with(lost_identity(NA_character_, "the pipeline was not traced")))
   }
   source <- trace$source_data
   if (id_col %in% names(source)) {
-    return(lost_identity(NA_character_, "the source has a column named .whence_id"))
+    return(stop_with(lost_identity(NA_character_, "the source has a column named .whence_id")))
   }
 
   if (!is.null(trace$seed)) {
@@ -103,20 +212,32 @@ identity_pass <- function(trace) {
     on.exit(reset_seed(old_seed), add = TRUE)
   }
 
+  keys <- trace$keys
+  record <- function(data, id_map, ids = NULL) {
+    row_ids <- ids %||% data[[id_col]]
+    index <- as.integer(substring(row_ids, 2))
+    sources <- if (is.null(id_map)) index else unname(id_map[index])
+    codes <- if (!is.null(keys) && is.data.frame(data) && all(keys %in% names(data))) {
+      key_codes(data, trace$value, keys)
+    }
+    rec$sources[[length(rec$sources) + 1L]] <- sources
+    rec$codes[length(rec$codes) + 1L] <- list(codes)
+  }
+
   data <- source
   data[[id_col]] <- paste0("w", seq_len(nrow(source)), recycle0 = TRUE)
   id_map <- NULL
-  ids <- NULL
+  record(data, id_map)
   stages <- trace$stage_list
 
   for (i in seq_along(stages)) {
     stage <- stages[[i]]
     verb <- stage_verb(stage)
     if (is.na(verb) || !verb %in% tracked_verbs) {
-      return(lost_identity(verb))
+      return(stop_with(lost_identity(verb)))
     }
     if (verb == "pull" && i != length(stages)) {
-      return(lost_identity(verb))
+      return(stop_with(lost_identity(verb)))
     }
 
     step <- tryCatch(
@@ -124,22 +245,44 @@ identity_pass <- function(trace) {
       error = function(e) NULL
     )
     if (is.null(step)) {
-      return(lost_identity(verb))
+      return(stop_with(lost_identity(verb)))
     }
     expected_n <- trace$stages$n[[i + 1L]]
     if (!is.na(expected_n) && !identical(row_count(step$data), expected_n)) {
-      return(lost_identity(verb, paste0("the hidden id changed the result of ", verb, "()")))
+      return(stop_with(lost_identity(verb, paste0("the hidden id changed the result of ", verb, "()"))))
     }
     data <- step$data
     id_map <- step$id_map
-    ids <- step$ids
+    record(data, id_map, step$ids)
   }
 
-  if (is.null(ids)) {
-    ids <- data[[id_col]]
-  }
-  source_ids <- resolve_ids(ids, id_map)
-  list(rows = source[sort(unique(source_ids)), , drop = FALSE])
+  out$ok <- TRUE
+  out$sources <- rec$sources
+  out$codes <- rec$codes
+  out
+}
+
+
+#' The source rows with these row numbers, in their original order
+#' @noRd
+source_rows <- function(trace, ids) {
+  trace$source_data[sort(unique(as.integer(ids))), , drop = FALSE]
+}
+
+
+#' The row of `table` that each row of `data` belongs to, by the key columns
+#'
+#' Each key is matched as integer codes, so NA and "NA" stay apart.
+#' @noRd
+key_codes <- function(data, table, keys) {
+  codes <- lapply(keys, function(key) {
+    values <- c(as.character(table[[key]]), as.character(data[[key]]))
+    match(values, unique(values))
+  })
+  combined <- do.call(paste, c(codes, sep = ":"))
+  table_keys <- combined[seq_len(nrow(table))]
+  data_keys <- combined[nrow(table) + seq_len(nrow(data))]
+  match(data_keys, table_keys)
 }
 
 
@@ -273,6 +416,12 @@ lost_identity <- function(verb, why = NULL) {
 #' This looks at the stages only. It evaluates nothing.
 #' @noRd
 rows_unavailable_reason <- function(trace) {
+  if (inherits(trace, "whence_group")) {
+    if (!trace$replay$ok) {
+      return(trace$replay$reason)
+    }
+    trace <- trace$table
+  }
   if (!trace$traced) {
     return(lost_identity(NA_character_, "the pipeline was not traced")$reason)
   }

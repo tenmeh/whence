@@ -18,7 +18,8 @@
 # reads the code of the app for library() and pkg:: calls. renv never reads
 # a folder named "vendor". So the demo and whence go in vendor/, app.R at
 # the top only sources them, and live-packages.R names the packages to
-# bundle. reactable gives the table of "View the rows".
+# bundle. reactable gives the table of "View the rows", and ggplot2 draws
+# the plot.
 #
 #   app/
 #     app.R                  sources vendor/demo/app.R
@@ -26,7 +27,7 @@
 #     vendor/demo/app.R      a copy of inst/examples/demo/app.R
 #     vendor/lib/whence/     whence, installed from this commit
 
-live_packages <- c("shiny", "dplyr", "reactable")
+live_packages <- c("shiny", "dplyr", "reactable", "ggplot2")
 
 args <- commandArgs(trailingOnly = TRUE)
 site <- if (length(args) >= 1L) args[[1]] else "docs"
