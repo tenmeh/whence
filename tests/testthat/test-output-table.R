@@ -186,3 +186,36 @@ test_that("an unknown column in a format list stops with the real columns", {
     fixed = TRUE
   )
 })
+
+test_that("a click on a horizontal bar finds its row on the y axis", {
+  data <- data.frame(region = c("APAC", "EMEA"), total = c(3900, 9900))
+  click <- function(y) {
+    list(x = 100, y = y, mapping = list(x = "total", y = "region"),
+         domain = list(discrete_limits = list(y = list("APAC", "EMEA"))))
+  }
+
+  expect_identical(clicked_row(data, click(1.1)), 1L)
+  expect_identical(clicked_row(data, click(2.2)), 2L)
+  expect_identical(clicked_row(data, click(4)), NA_integer_)
+})
+
+test_that("plot_values() skips a layer with its own data, and respects inherit.aes", {
+  skip_if_not_installed("ggplot2")
+  data <- data.frame(region = c("EMEA", "APAC"), total = c(9900, 3900))
+  targets <- data.frame(region = c("APAC", "EMEA"), target = c(1, 2))
+
+  drawn <- ggplot2::ggplot(data, ggplot2::aes(region, total)) +
+    ggplot2::geom_col(data = targets, ggplot2::aes(region, target)) +
+    ggplot2::geom_point()
+  expect_identical(plot_values(drawn, data)$x, c("EMEA", "APAC"))
+  expect_identical(plot_values(drawn, data)$y, c(9900, 3900))
+
+  apart <- ggplot2::ggplot(data, ggplot2::aes(total, total)) +
+    ggplot2::geom_point(ggplot2::aes(x = region), inherit.aes = FALSE)
+  expect_identical(plot_values(apart, data)$x, c("EMEA", "APAC"))
+  expect_null(plot_values(apart, data)$y)
+
+  only_other <- ggplot2::ggplot(data, ggplot2::aes(region, total)) +
+    ggplot2::geom_col(data = targets, ggplot2::aes(region, target))
+  expect_null(plot_values(only_other, data))
+})

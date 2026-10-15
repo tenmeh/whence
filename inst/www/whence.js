@@ -246,6 +246,13 @@
   }
 
   function onTable(message) {
+    // The plot was drawn again, so the server holds a new table. An open
+    // panel belongs to the old one, and its row number can point to another
+    // group now: close it, as renderValue() does for a value or a table.
+    var state = outputs[message.id];
+    if (state && state.panel) {
+      closePanel(message.id, state.panel.contains(document.activeElement));
+    }
     var container = document.getElementById(message.id + "-whence-table");
     if (container) {
       renderTable(container, message.id, message.table);

@@ -66,7 +66,7 @@ cached_group <- function(session, name, table, row) {
   key <- paste0(name, "\037", row)
   group <- if (!is.null(groups)) get0(key, envir = groups, inherits = FALSE)
   if (is.null(group)) {
-    group <- whence_group(table, row)
+    group <- whence_group(table, row = row)
     if (!is.null(groups)) {
       assign(key, group, envir = groups)
     }

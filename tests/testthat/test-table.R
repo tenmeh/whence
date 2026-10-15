@@ -168,3 +168,23 @@ test_that("a group value of NA finds the NA group", {
   expect_identical(is.na(whence_value(whence_group(tab, g = NA))$g), TRUE)
   expect_identical(whence_value(whence_group(tab, g = "NA"))$n, 2L)
 })
+
+test_that("a group column named like the arguments can be given as a value", {
+  local_dplyr()
+  d <- data.frame(r = c("a", "a", "b"), x = 1:3)
+  tab <- whence_table(d |> count(r))
+
+  expect_identical(whence_group(tab, r = "b")$row, 2L)
+  expect_identical(whence_group(tab, 2)$row, 2L)
+  expect_identical(whence_group(tab, row = 2)$row, 2L)
+})
+
+test_that("the hint for a missing row reads well for a factor, and for no rows", {
+  local_dplyr()
+
+  by_cyl <- whence_table(mtcars |> group_by(cyl = factor(cyl)) |> summarise(n = n()))
+  expect_error(whence_group(by_cyl), "such as `cyl = \"4\"`.", fixed = TRUE)
+
+  none <- whence_table(mtcars |> filter(mpg > 100) |> count(cyl))
+  expect_error(whence_group(none), "Give the number of a row, or its group values.", fixed = TRUE)
+})

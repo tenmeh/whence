@@ -14,6 +14,7 @@ managers <- data.frame(region = c("APAC", "EMEA"), manager = c("Kim", "Lou"))
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
+  numericInput("plot_from", "Plot from year", 2023),
   tags$p(whenceOutput("total", label = "Total revenue")),
   tags$p(whenceOutput("customers", label = "Customers")),
   tags$div(id = "joined-wrap", whenceOutput("joined", label = "Joined")),
@@ -61,12 +62,14 @@ server <- function(input, output, session) {
     quoted = TRUE
   )
   output$plot_region <- renderWhencePlot(
-    by_region,
+    sales |>
+      filter(year >= input$plot_from) |>
+      group_by(region) |>
+      summarise(total = sum(revenue)),
     # A computed aesthetic, as for bars sorted by their height.
     plot = function(data) {
       ggplot2::ggplot(data, ggplot2::aes(reorder(region, total), total)) + ggplot2::geom_col()
-    },
-    quoted = TRUE
+    }
   )
 
   # The traces that the server holds, for the clean-up tests, and the row

@@ -152,17 +152,14 @@ clicked_row <- function(data, click, values = NULL) {
     return(NA_integer_)
   }
 
-  limits <- unlist(click$domain$discrete_limits$x)
-  if (!is.null(limits)) {
-    i <- round(as.numeric(click$x))
-    if (i < 1 || i > length(limits)) {
-      return(NA_integer_)
-    }
-    candidates <- which(as.character(x) == limits[[i]])
-    if (length(candidates) > 1 && is.numeric(y)) {
-      return(candidates[which.min(abs(y[candidates] - as.numeric(click$y)))])
-    }
-    return(if (length(candidates) > 0) candidates[[1]] else NA_integer_)
+  # A discrete axis: x for upright bars, y for horizontal bars.
+  x_limits <- unlist(click$domain$discrete_limits$x)
+  y_limits <- unlist(click$domain$discrete_limits$y)
+  if (!is.null(x_limits)) {
+    return(discrete_row(x, x_limits, click$x, y, click$y))
+  }
+  if (!is.null(y_limits)) {
+    return(discrete_row(y, y_limits, click$y, x, click$x))
   }
 
   if (!is.numeric(y)) {
@@ -182,10 +179,28 @@ clicked_row <- function(data, click, values = NULL) {
 }
 
 
+#' The row on a discrete axis: the level under the click, and when more
+#' than one row has it, the row nearest to the click on the other axis
+#' @noRd
+discrete_row <- function(values, limits, at, other, other_at) {
+  i <- round(as.numeric(at))
+  if (length(i) != 1 || is.na(i) || i < 1 || i > length(limits)) {
+    return(NA_integer_)
+  }
+  candidates <- which(as.character(values) == limits[[i]])
+  if (length(candidates) > 1 && is.numeric(other)) {
+    return(candidates[which.min(abs(other[candidates] - as.numeric(other_at)))])
+  }
+  if (length(candidates) > 0) candidates[[1]] else NA_integer_
+}
+
+
 #' The x and y of each row of the table, from the aesthetics of a ggplot
 #'
-#' The mappings of the plot, and of its first layer, are evaluated on the
-#' table, as ggplot does. So `aes(reorder(region, total), total)` gives the
+#' The mappings of the plot, and of its first layer that draws the table,
+#' are evaluated on the table, as ggplot does. A layer with data of its own
+#' is skipped, and a layer with `inherit.aes = FALSE` does not take the
+#' mappings of the plot. So `aes(reorder(region, total), total)` gives the
 #' level of each row. The mappings come from the code of the app, not from
 #' the browser. Anything that fails gives NULL, and a click then falls back
 #' to a plain column name.
@@ -196,9 +211,18 @@ plot_values <- function(drawn, data) {
   }
   data <- as.data.frame(data)
   mapping <- as.list(drawn$mapping)
+  own_data <- vapply(drawn$layers, function(layer) !inherits(layer$data, "waiver"), logical(1))
+  if (length(drawn$layers) > 0 && all(own_data)) {
+    # No layer draws the table, so no click can be matched to its rows.
+    return(NULL)
+  }
   if (length(drawn$layers) > 0) {
-    layer <- as.list(drawn$layers[[1]]$mapping)
-    mapping[names(layer)] <- layer
+    layer <- drawn$layers[[which(!own_data)[1]]]
+    if (isFALSE(layer$inherit.aes)) {
+      mapping <- list()
+    }
+    layer_mapping <- as.list(layer$mapping)
+    mapping[names(layer_mapping)] <- layer_mapping
   }
   evaluate <- function(aesthetic) {
     if (is.null(aesthetic)) {

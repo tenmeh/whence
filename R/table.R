@@ -65,10 +65,11 @@ whence_table <- function(expr, env = parent.frame()) {
 #' that keeps this row, so it gives the row as the table has it.
 #'
 #' @param table A `whence_table` from [whence_table()].
+#' @param ... The values of the group columns of the row, by name, such as
+#'   `region = "APAC"`. They must find exactly one row. A single number
+#'   without a name is the number of the row.
 #' @param row The number of a row of the table. Give `row`, or the group
 #'   values in `...`.
-#' @param ... The values of the group columns of the row, by name, such as
-#'   `region = "APAC"`. They must find exactly one row.
 #'
 #' @return A `whence_group` object, which is also a `whence_trace`. Its value
 #'   is the row, as a data frame with one row.
@@ -87,7 +88,7 @@ whence_table <- function(expr, env = parent.frame()) {
 #' # The same row, by its group
 #' whence_group(by_cyl, cyl = 6)
 #' @export
-whence_group <- function(table, row = NULL, ...) {
+whence_group <- function(table, ..., row = NULL) {
   if (!inherits(table, "whence_table")) {
     stop("`table` must be a `whence_table` from `whence_table()`, not ", class(table)[1], ".", call. = FALSE)
   }
@@ -98,7 +99,18 @@ whence_group <- function(table, row = NULL, ...) {
       call. = FALSE
     )
   }
+  # `row` comes after `...`, so it is never partly matched by a group value
+  # such as `r = ...`. A row number can still be given by position.
   values <- list(...)
+  named <- if (is.null(names(values))) rep(FALSE, length(values)) else nzchar(names(values))
+  if (any(!named)) {
+    if (length(values) == 1 && is.null(row)) {
+      row <- values[[1]]
+      values <- list()
+    } else {
+      stop("Give `row` or the group values in `...`, not both.", call. = FALSE)
+    }
+  }
   if (length(values) > 0) {
     if (!is.null(row)) {
       stop("Give `row` or the group values in `...`, not both.", call. = FALSE)
@@ -106,11 +118,7 @@ whence_group <- function(table, row = NULL, ...) {
     row <- row_of_group(table, values)
   }
   if (is.null(row)) {
-    stop(
-      "Give the number of a row, or its group values, such as ",
-      "`", table$keys[[1]], " = ", deparse_one(table$value[[table$keys[[1]]]][[1]]), "`.",
-      call. = FALSE
-    )
+    stop("Give the number of a row, or its group values", group_hint(table), ".", call. = FALSE)
   }
   n_rows <- nrow(table$value)
   if (!(is.numeric(row) && length(row) == 1 && !is.na(row) && row == round(row) && row >= 1 && row <= n_rows)) {
@@ -133,6 +141,23 @@ whence_group <- function(table, row = NULL, ...) {
     ),
     class = c("whence_group", "whence_trace")
   )
+}
+
+
+#' An example of group values for an error message, such as
+#' " such as `region = "APAC"`", or "" for a table with no rows
+#' @noRd
+group_hint <- function(table) {
+  if (nrow(table$value) == 0) {
+    return("")
+  }
+  key <- table$keys[[1]]
+  value <- table$value[[key]][[1]]
+  # A factor or a Date would deparse as structure(...); its text reads well.
+  if (!is.na(value) && !is.null(attributes(value))) {
+    value <- as.character(value)
+  }
+  paste0(", such as `", key, " = ", deparse_one(value), "`")
 }
 
 

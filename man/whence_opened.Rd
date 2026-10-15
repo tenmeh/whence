@@ -29,7 +29,7 @@ is open, it gives a list:
 \code{\link[=whencePlotOutput]{whencePlotOutput()}}. \code{NULL} for \code{\link[=whenceOutput]{whenceOutput()}}, and for the panel of a
 whole table.
 \item \code{data}: that row of the table, as a data frame with one row. For
-\code{\link[=whenceOutput]{whenceOutput()}}, the value.
+\code{\link[=whenceOutput]{whenceOutput()}}, the value. \code{NULL} for the panel of a whole table.
 }
 
 Only one panel is open at a time.
