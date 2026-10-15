@@ -98,6 +98,18 @@ removable_steps <- function(x) {
 #' @noRd
 format_cells <- function(table, format, keys = character(0)) {
   table <- as.data.frame(table)
+  if (is.list(format)) {
+    # A misspelt column would otherwise format nothing, with no message.
+    unknown <- setdiff(names(format), names(table))
+    if (length(unknown) > 0) {
+      stop(
+        "`format` names columns that are not in the table: ",
+        paste0("`", unknown, "`", collapse = ", "), ". The columns are ",
+        paste0("`", names(table), "`", collapse = ", "), ".",
+        call. = FALSE
+      )
+    }
+  }
   out <- lapply(names(table), function(col) {
     values <- table[[col]]
     fn <- if (is.list(format)) {

@@ -328,3 +328,29 @@ test_that("percentages are rounded, a small one is <1%, and 100% means all", {
     c("50%", "<1%", "", "99%", "12%", "100%")
   )
 })
+
+test_that("print shows the number of each step, with gaps for hidden steps", {
+  local_dplyr()
+  sales <- make_sales()
+
+  text <- format(whence_trace(
+    sales |>
+      group_by(region) |>
+      group_by(region) |>
+      filter(year >= 2023) |>
+      summarise(n = n()) |>
+      summarise(n = sum(n))
+  ))
+
+  expect_match(text, "^  0 sales", all = FALSE)
+  expect_match(text, "^  1 -> grouped by region", all = FALSE)
+  expect_match(text, "^  3 -> year >= 2023", all = FALSE)
+  expect_no_match(text, "^  2 ->")
+})
+
+test_that("a table result points to whence_table()", {
+  local_dplyr()
+  sales <- make_sales()
+
+  expect_error(whence_trace(sales |> count(region)), "For a table, use `whence_table()`", fixed = TRUE)
+})

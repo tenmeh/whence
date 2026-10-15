@@ -123,7 +123,19 @@ server <- function(input, output, session) {
 ```
 
 Under a plot, "Show the data" gives the same table, so a keyboard user can
-open each panel too.
+open each panel too. A computed axis, such as
+`aes(reorder(region, total), total)` for sorted bars, works.
+
+`whence_opened()` lets the app follow the viewer. It gives a reactive with
+the row whose panel is open:
+
+```r
+opened <- whence_opened("by_region")
+output$detail <- renderText({
+  req(opened())
+  paste("Looking at", opened()$data$region)
+})
+```
 
 The demo has a few outputs to try. It also runs in your browser, with no
 install, on the [live demo](https://tenmeh.github.io/whence/articles/live-demo.html)
@@ -150,11 +162,11 @@ as.data.frame(trace)  # one row for each step
 whence_value(trace)   # the value
 whence_code(trace)    # the reproduce code
 whence_rows(trace)    # the rows of mtcars that make the value
-whence_rows(trace, step = 2)  # the rows that the second filter removed
+whence_rows(trace, step = 2)  # the rows that step 2 removed; print() shows the numbers
 
 # A summary table, and one of its rows
 by_cyl <- whence_table(mtcars |> filter(hp > 90) |> count(cyl))
-whence_group(by_cyl, 2)
+whence_group(by_cyl, cyl = 6)  # the row of 6 cylinders
 ```
 
 ## How it works

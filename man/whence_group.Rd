@@ -4,12 +4,16 @@
 \alias{whence_group}
 \title{Explain one row of a summary table}
 \usage{
-whence_group(table, row)
+whence_group(table, row = NULL, ...)
 }
 \arguments{
 \item{table}{A \code{whence_table} from \code{\link[=whence_table]{whence_table()}}.}
 
-\item{row}{The number of a row of the table.}
+\item{row}{The number of a row of the table. Give \code{row}, or the group
+values in \code{...}.}
+
+\item{...}{The values of the group columns of the row, by name, such as
+\code{region = "APAC"}. They must find exactly one row.}
 }
 \value{
 A \code{whence_group} object, which is also a \code{whence_trace}. Its value
@@ -41,5 +45,8 @@ by_cyl <- whence_table(
 six <- whence_group(by_cyl, 2)
 six
 whence_rows(six)
+
+# The same row, by its group
+whence_group(by_cyl, cyl = 6)
 \dontshow{\}) # examplesIf}
 }

@@ -157,6 +157,14 @@
   padding-left: 1em;
 }
 
+/* The number of each step, as whence_rows(step = ) takes it. */
+.whence-step dt::before {
+  content: attr(data-step);
+  display: inline-block;
+  min-width: 1.5em;
+  color: var(--whence-muted);
+}
+
 .whence-step dd {
   display: flex;
   gap: 0.75em;

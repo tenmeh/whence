@@ -94,6 +94,10 @@ renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height =
   draw_env <- new.env(parent = env)
   draw_env$.whence_draw <- function() {
     trace <- trace_expr(expr, env, mode = "table")
+    drawn <- plot(trace$value)
+    # The x and y of each row, from the plot itself. A click is matched to
+    # these, so the text of the click data is never evaluated.
+    trace$plot_values <- plot_values(drawn, trace$value)
     session <- shiny::getDefaultReactiveDomain()
     name <- if (!is.null(session)) shiny::getCurrentOutputInfo(session)$name
     if (!is.null(name)) {
@@ -104,8 +108,8 @@ renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height =
       )
     }
     # A ggplot must be returned, not printed: renderPlot() then builds it and
-    # keeps its coordinates, so a click knows the aesthetics and the levels.
-    plot(trace$value)
+    # keeps its coordinates, so a click knows the axes and the levels.
+    drawn
   }
 
   shiny::renderPlot(
@@ -128,19 +132,23 @@ plot_click_suffix <- "_whence_click"
 
 #' The row of a summary table under a click on its plot, or NA
 #'
+#' `values` holds the x and y of each row, from plot_values(), so a
+#' computed aesthetic such as `reorder(region, total)` finds its rows too.
+#' Without it, x and y must be plain columns.
+#'
 #' On a discrete x axis, the bar under the click is the level of x at the
 #' rounded x of the click. When more than one row has that level, as in a
 #' stacked or dodged chart, the row whose y is nearest to the click wins.
 #' On a continuous axis, the nearest point within 15 pixels wins.
 #' @noRd
-clicked_row <- function(data, click) {
+clicked_row <- function(data, click, values = NULL) {
   data <- as.data.frame(data)
-  if (!is.list(click) || is.null(click$x)) {
+  if (!is.list(click) || !is.numeric(unlist(click$x)) || length(unlist(click$x)) != 1) {
     return(NA_integer_)
   }
-  xvar <- unlist(click$mapping$x)
-  yvar <- unlist(click$mapping$y)
-  if (is.null(xvar) || !xvar %in% names(data)) {
+  x <- values$x %||% aesthetic_values(data, unlist(click$mapping$x))
+  y <- values$y %||% aesthetic_values(data, unlist(click$mapping$y))
+  if (is.null(x)) {
     return(NA_integer_)
   }
 
@@ -150,17 +158,67 @@ clicked_row <- function(data, click) {
     if (i < 1 || i > length(limits)) {
       return(NA_integer_)
     }
-    candidates <- which(as.character(data[[xvar]]) == limits[[i]])
-    if (length(candidates) > 1 && !is.null(yvar) && yvar %in% names(data) && is.numeric(data[[yvar]])) {
-      return(candidates[which.min(abs(data[[yvar]][candidates] - as.numeric(click$y)))])
+    candidates <- which(as.character(x) == limits[[i]])
+    if (length(candidates) > 1 && is.numeric(y)) {
+      return(candidates[which.min(abs(y[candidates] - as.numeric(click$y)))])
     }
     return(if (length(candidates) > 0) candidates[[1]] else NA_integer_)
   }
 
+  if (!is.numeric(y)) {
+    return(NA_integer_)
+  }
+  points <- data.frame(.whence_x = x, .whence_y = y)
   near <- tryCatch(
-    shiny::nearPoints(data, click, threshold = 15, maxpoints = 1, allRows = TRUE),
+    shiny::nearPoints(
+      points, click,
+      xvar = ".whence_x", yvar = ".whence_y",
+      threshold = 15, maxpoints = 1, allRows = TRUE
+    ),
     error = function(e) NULL
   )
   hit <- if (!is.null(near)) which(near$selected_) else integer(0)
   if (length(hit) > 0) hit[[1]] else NA_integer_
+}
+
+
+#' The x and y of each row of the table, from the aesthetics of a ggplot
+#'
+#' The mappings of the plot, and of its first layer, are evaluated on the
+#' table, as ggplot does. So `aes(reorder(region, total), total)` gives the
+#' level of each row. The mappings come from the code of the app, not from
+#' the browser. Anything that fails gives NULL, and a click then falls back
+#' to a plain column name.
+#' @noRd
+plot_values <- function(drawn, data) {
+  if (!inherits(drawn, "ggplot")) {
+    return(NULL)
+  }
+  data <- as.data.frame(data)
+  mapping <- as.list(drawn$mapping)
+  if (length(drawn$layers) > 0) {
+    layer <- as.list(drawn$layers[[1]]$mapping)
+    mapping[names(layer)] <- layer
+  }
+  evaluate <- function(aesthetic) {
+    if (is.null(aesthetic)) {
+      return(NULL)
+    }
+    values <- tryCatch(rlang::eval_tidy(aesthetic, data = data), error = function(e) NULL)
+    if (is.null(values) || length(values) != nrow(data)) NULL else values
+  }
+  list(x = evaluate(mapping$x), y = evaluate(mapping$y))
+}
+
+
+#' The values of a plain column named by the click data, or NULL
+#'
+#' Only an exact column name is used. The text is never evaluated: it comes
+#' from the browser.
+#' @noRd
+aesthetic_values <- function(data, text) {
+  if (is.null(text) || !is.character(text) || length(text) != 1 || !text %in% names(data)) {
+    return(NULL)
+  }
+  data[[text]]
 }

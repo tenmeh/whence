@@ -103,6 +103,13 @@ reference:
       - whencePlotOutput
       - renderWhencePlot
 
+  - title: React to what the viewer opens
+    desc: >
+      A reactive with the row of the table whose panel is open, so the app
+      can follow the viewer.
+    contents:
+      - whence_opened
+
   - title: The engine, with no Shiny
     desc: >
       Trace a pipeline from the console or a test, and read its parts.

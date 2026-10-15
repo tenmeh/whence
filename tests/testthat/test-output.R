@@ -259,11 +259,14 @@ test_that("a click opens the panel with no trip to the server", {
   app <- local_app_driver(app_path(), name = "click")
   wait_for_output(app, "total")
 
-  inputs_before <- names(app$get_values(input = TRUE)$input)
+  inputs_before <- setdiff(names(app$get_values(input = TRUE)$input), ".whence_opened")
   app$click(selector = "#total .whence-value")
   app$wait_for_js(panel_open)
 
-  expect_identical(names(app$get_values(input = TRUE)$input), inputs_before)
+  # The panel is filled from the render: no request goes to the server. The
+  # only new input is the notice for whence_opened(), which the panel does
+  # not wait for.
+  expect_identical(setdiff(names(app$get_values(input = TRUE)$input), ".whence_opened"), inputs_before)
   expect_null(app$get_value(input = ".whence_request"))
   expect_identical(js(app, "document.querySelector('#total .whence-value').textContent"), "$3,900")
   expect_identical(
@@ -496,9 +499,14 @@ test_that("a row of a table opens its own panel, and a removed count shows its r
   expect_identical(js(app, "document.querySelector('.whence-rows h3').textContent"), "4 rows removed by year >= 2023")
   expect_identical(js(app, "document.activeElement.textContent"), "4 rows removed by year >= 2023")
 
+  expect_identical(app$get_value(export = "opened_row"), 1L)
+  expect_identical(app$get_value(export = "opened_region"), "APAC")
+
   press(app, "Escape", keycode = 27)
   app$wait_for_js("document.querySelector('.whence-panel') === null")
   expect_identical(js(app, "document.activeElement.textContent"), "APAC")
+  app$wait_for_idle()
+  expect_identical(app$get_value(export = "opened_row"), NA_integer_)
   expect_no_shiny_errors(app)
 })
 

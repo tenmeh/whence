@@ -62,12 +62,21 @@ server <- function(input, output, session) {
   )
   output$plot_region <- renderWhencePlot(
     by_region,
-    plot = function(data) ggplot2::ggplot(data, ggplot2::aes(region, total)) + ggplot2::geom_col(),
+    # A computed aesthetic, as for bars sorted by their height.
+    plot = function(data) {
+      ggplot2::ggplot(data, ggplot2::aes(reorder(region, total), total)) + ggplot2::geom_col()
+    },
     quoted = TRUE
   )
 
-  # The traces that the server holds, for the clean-up tests.
-  exportTestValues(traces = sort(ls(session$userData$.whence_traces)))
+  # The traces that the server holds, for the clean-up tests, and the row
+  # of the table whose panel is open, for whence_opened().
+  opened <- whence_opened("by_region")
+  exportTestValues(
+    traces = sort(ls(session$userData$.whence_traces)),
+    opened_row = if (is.null(opened())) NA_integer_ else opened()$row,
+    opened_region = if (is.null(opened())) NA_character_ else opened()$data$region
+  )
 
   # A join ends the chain, so the panel says where it stopped.
   output$joined <- renderWhence(

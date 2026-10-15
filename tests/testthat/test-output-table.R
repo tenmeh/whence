@@ -149,3 +149,40 @@ test_that("a new render forgets the panels of the rows of the old table", {
 test_that("renderWhencePlot() checks plot", {
   expect_error(renderWhencePlot(1, plot = "bars"), "`plot` must be a function")
 })
+
+test_that("a click finds the row of a bar whose x is computed, from the plot itself", {
+  skip_if_not_installed("ggplot2")
+  data <- data.frame(region = c("EMEA", "APAC"), total = c(9900, 3900))
+  drawn <- ggplot2::ggplot(data, ggplot2::aes(reorder(region, total), total)) + ggplot2::geom_col()
+  click <- list(x = 1, y = 100, mapping = list(x = "reorder(region, total)", y = "total"),
+                domain = list(discrete_limits = list(x = list("APAC", "EMEA"))))
+
+  values <- plot_values(drawn, data)
+
+  expect_identical(as.character(values$x), c("EMEA", "APAC"))
+  expect_identical(clicked_row(data, click, values), 2L)
+  expect_identical(clicked_row(data, click), NA_integer_)
+})
+
+test_that("the text of the click data is never evaluated", {
+  data <- data.frame(region = c("APAC", "EMEA"), total = c(1, 2))
+  touched <- FALSE
+  assign("touch", function() touched <<- TRUE, envir = globalenv())
+  withr::defer(rm("touch", envir = globalenv()))
+  click <- list(x = 1, y = 1, mapping = list(x = "touch()", y = "total"),
+                domain = list(discrete_limits = list(x = list("APAC", "EMEA"))))
+
+  expect_identical(clicked_row(data, click), NA_integer_)
+  expect_identical(touched, FALSE)
+  expect_identical(clicked_row(data, list(x = "1")), NA_integer_)
+})
+
+test_that("an unknown column in a format list stops with the real columns", {
+  local_dplyr()
+
+  expect_error(
+    table_payload(region_table(), list(totl = toupper)),
+    "names columns that are not in the table: `totl`. The columns are `region`, `total`.",
+    fixed = TRUE
+  )
+})
