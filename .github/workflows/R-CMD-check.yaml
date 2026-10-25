@@ -83,6 +83,8 @@ jobs:
 
       - uses: r-lib/actions/check-r-package@v2
         with:
-          # CRAN accepts no NOTEs. This check thus accepts none.
-          error-on: '"note"'
+          # CRAN accepts no NOTEs. This check thus accepts none, except on a
+          # job that leaves out a suggested package: R CMD check gives a NOTE
+          # that the package is not available, and that NOTE is expected.
+          error-on: ${{ matrix.config.ignore && '"warning"' || '"note"' }}
           upload-snapshots: true
