@@ -4,12 +4,19 @@
 \alias{whence_table}
 \title{Trace where the rows of a summary table came from}
 \usage{
-whence_table(expr, env = parent.frame())
+whence_table(
+  expr,
+  env = parent.frame(),
+  lazy = getOption("whence.lazy", "stop")
+)
 }
 \arguments{
 \item{expr}{A pipeline that ends in a data frame.}
 
 \item{env}{The environment in which to evaluate \code{expr}.}
+
+\item{lazy}{How to handle lazy tables: \code{"stop"} or \code{"count"}, with no
+partial matching. Defaults to \code{getOption("whence.lazy", "stop")}.}
 }
 \value{
 A \code{whence_table} object, which is also a \code{whence_trace}. Its value

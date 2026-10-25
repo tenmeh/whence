@@ -10,7 +10,7 @@ sales <- data.frame(
   revenue = seq(100, 2000, by = 100),
   stringsAsFactors = FALSE
 )
-managers <- data.frame(region = c("APAC", "EMEA"), manager = c("Kim", "Lou"))
+managers <- data.frame(region = c("APAC", "APAC", "EMEA"), manager = c("Kim", "Pat", "Lou"))
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
@@ -18,6 +18,7 @@ ui <- fluidPage(
   tags$p(whenceOutput("total", label = "Total revenue")),
   tags$p(whenceOutput("customers", label = "Customers")),
   tags$div(id = "joined-wrap", whenceOutput("joined", label = "Joined")),
+  tags$p(whenceOutput("joined_one", label = "One repeated match")),
   uiOutput("dynamic"),
   whenceTableOutput("by_region", label = "Revenue by region"),
   whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px"),
@@ -81,11 +82,17 @@ server <- function(input, output, session) {
     opened_region = if (is.null(opened())) NA_character_ else opened()$data$region
   )
 
-  # A join ends the chain, so the panel says where it stopped.
+  # Repeated matches have their own count, separate from removed rows.
   output$joined <- renderWhence(
     sales |>
       filter(region == input$region) |>
-      inner_join(managers, by = "region") |>
+      inner_join(managers, by = "region", relationship = "many-to-many") |>
+      summarise(n = n())
+  )
+  output$joined_one <- renderWhence(
+    sales |>
+      filter(revenue == 100) |>
+      inner_join(managers, by = "region", relationship = "many-to-many") |>
       summarise(n = n())
   )
 }

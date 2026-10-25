@@ -69,6 +69,10 @@ stage_payload <- function(stage, removable = integer(0)) {
   if (!is.na(stage$groups)) {
     out$groups <- stage$groups
   }
+  if (!is.na(stage$added) && stage$added > 0) {
+    out$added <- stage$added
+    out$addedText <- format_count(stage$added)
+  }
   out
 }
 
@@ -80,14 +84,16 @@ stage_payload <- function(stage, removable = integer(0)) {
 #' @noRd
 removable_steps <- function(x) {
   trace <- if (inherits(x, "whence_group")) x$table else x
-  if (!trace$traced || id_col %in% names(trace$source_data)) {
+  origin <- row_origin(trace)
+  if (!trace$traced || !is.null(origin$reason) || id_col %in% names(origin$data)) {
     return(integer(0))
   }
   verbs <- vapply(trace$stage_list, stage_verb, character(1))
   followed <- !is.na(verbs) & verbs %in% tracked_verbs
+  followed[seq_along(verbs) <= origin$step] <- TRUE
   last_ok <- if (all(followed)) length(verbs) else which(!followed)[1] - 1L
   stages <- x$stages
-  stages$step[!is.na(stages$delta) & stages$delta < 0 & stages$step >= 1 & stages$step <= last_ok]
+  stages$step[!is.na(stages$delta) & stages$delta < 0 & stages$step > origin$step & stages$step <= last_ok]
 }
 
 

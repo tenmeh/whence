@@ -353,7 +353,7 @@ test_that("View the rows fires the input and fills the table", {
   expect_no_shiny_errors(app)
 })
 
-test_that("after a join the panel says where the chain stopped", {
+test_that("a supported join is shown in the panel", {
   skip_on_cran()
   local_dplyr()
   app <- local_app_driver(app_path(), name = "joined")
@@ -363,8 +363,36 @@ test_that("after a join the panel says where the chain stopped", {
   app$wait_for_js(panel_open)
 
   expect_identical(
-    js(app, "document.querySelector('.whence-panel .whence-untraced').textContent"),
-    "Steps before inner_join() are not shown, because whence does not know inner_join()."
+    js(app, "document.querySelector('.whence-panel .whence-untraced') === null"),
+    TRUE
+  )
+  added <- "document.querySelector('.whence-panel .whence-delta-added')"
+  expect_identical(js(app, paste0(added, ".tagName")), "SPAN")
+  expect_identical(js(app, paste0(added, ".textContent")), "+10 rows")
+  expect_identical(
+    js(app, paste0(added, ".title")),
+    "10 rows added because a row matched more than once"
+  )
+  expect_identical(
+    js(app, paste0(added, ".getAttribute('aria-label')")),
+    "10 rows added because a row matched more than once"
+  )
+  expect_no_shiny_errors(app)
+})
+
+test_that("one repeated match has singular text and accessible labels", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "joined-one")
+  wait_for_output(app, "joined_one")
+  app$click(selector = "#joined_one .whence-value")
+  app$wait_for_js(panel_open)
+  added <- "document.querySelector('.whence-panel .whence-delta-added')"
+  expect_identical(js(app, paste0(added, ".textContent")), "+1 row")
+  expect_identical(js(app, paste0(added, ".title")), "1 row added because a row matched more than once")
+  expect_identical(
+    js(app, paste0(added, ".getAttribute('aria-label')")),
+    "1 row added because a row matched more than once"
   )
   expect_no_shiny_errors(app)
 })

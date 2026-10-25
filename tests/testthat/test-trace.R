@@ -168,7 +168,7 @@ test_that("a step that is not a verb ends the chain, and the value is still give
 
   tr <- whence_trace(
     sales |>
-      inner_join(lookup, by = "region") |>
+      right_join(lookup, by = "region") |>
       summarise(total = sum(revenue))
   )
 
@@ -206,14 +206,14 @@ test_that("a join in the chain is named, and the steps after it are traced", {
   tr <- whence_trace(
     sales |>
       filter(year > 2022) |>
-      dplyr::left_join(managers, by = "region") |>
+      dplyr::full_join(managers, by = "region") |>
       summarise(n = n())
   )
 
   expect_identical(tr$traced, TRUE)
   expect_identical(
     tr$reason,
-    "Steps before left_join() are not shown, because whence does not know left_join()."
+    "Steps before full_join() are not shown, because whence does not know full_join()."
   )
   expect_match(format(tr), tr$reason, fixed = TRUE, all = FALSE)
 })
@@ -249,7 +249,7 @@ test_that("the help page lists every known verb", {
 test_that("a lazy table stops with a clear error", {
   lazy <- structure(list(), class = c("tbl_lazy", "tbl"))
 
-  expect_error(whence_trace(lazy), "database-backed pipeline")
+  expect_error(whence_trace(lazy), "a `tbl_lazy` from 'dbplyr'", fixed = TRUE)
 })
 
 test_that("the trace prints the waterfall and the code", {

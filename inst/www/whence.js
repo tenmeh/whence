@@ -416,11 +416,21 @@
       if (stage.delta !== undefined) {
         dd.appendChild(deltaElement(id, stage));
       }
+      if (stage.added > 0) {
+        var addedNoun = stage.added === 1 ? " row" : " rows";
+        var addedLabel = stage.addedText + addedNoun +
+          " added because a row matched more than once";
+        dd.appendChild(make("span", {
+          class: "whence-delta whence-delta-added",
+          title: addedLabel,
+          "aria-label": addedLabel
+        }, "+" + stage.addedText + addedNoun));
+      }
       step.appendChild(dd);
       list.appendChild(step);
     });
     wrap.appendChild(list);
-    // The chain stopped at a call that whence does not know, such as a join.
+    // The chain stopped at a call that whence does not know, such as full_join().
     if (data.reason) {
       wrap.appendChild(make("p", { class: "whence-untraced" }, data.reason));
     }

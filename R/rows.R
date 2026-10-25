@@ -18,7 +18,7 @@ id_col <- ".whence_id"
 carry_verbs <- c(
   "filter", "arrange", "slice", "slice_head", "slice_tail", "slice_min",
   "slice_max", "slice_sample", "head", "tail", "drop_na", "mutate",
-  "rename", "group_by", "ungroup"
+  "rename", "group_by", "ungroup", materialising_verbs, join_verbs
 )
 
 # The verbs that the identity pass can follow.
@@ -38,6 +38,16 @@ tracked_verbs <- c(
 #'
 #' For a group from [whence_group()], both are limited to the rows of that
 #' group.
+#' After a join, contributing rows are rows of the main source (`x`) only.
+#' Repeated matches return each source row once. Rows from `y` are not shown.
+#'
+#' With `lazy = "count"`, a lazy source has no row attribution until a
+#' materialising step such as `collect()` returns a data frame. The identity
+#' pass starts from that data frame and follows only later steps. Returned
+#' rows are rows of that collected data frame, not rows of the remote source.
+#' Requests for earlier steps (or the materialising step itself) give `NULL`
+#' with a `whence_rows_unavailable` warning. Without a materialising step,
+#' rows are unavailable, even though the final value or table is collected.
 #'
 #' The function replays the pipeline with a hidden id column on a copy of
 #' the source. [whence_trace()] never does this, so the waterfall costs
@@ -126,6 +136,13 @@ check_step <- function(trace, step) {
 rows_query <- function(x, step = NULL) {
   group <- if (inherits(x, "whence_group")) x$row else NULL
   trace <- if (is.null(group)) x else x$table
+  origin <- row_origin(trace)
+  if (!is.null(origin$reason)) {
+    return(lost_identity(NA_character_, origin$reason))
+  }
+  if (!is.null(step) && step <= origin$step) {
+    return(lost_identity(NA_character_, origin$prefix_reason))
+  }
   replay <- x$replay %||% replay_trace(trace)
   sources <- replay$sources
   codes <- replay$codes
@@ -202,7 +219,14 @@ replay_trace <- function(trace) {
   if (!trace$traced) {
     return(stop_with(lost_identity(NA_character_, "the pipeline was not traced")))
   }
-  source <- trace$source_data
+  origin <- row_origin(trace)
+  if (!is.null(origin$reason)) {
+    return(stop_with(lost_identity(NA_character_, origin$reason)))
+  }
+  source <- origin$data
+  # Empty slots keep the replay aligned with the original step numbers.
+  rec$sources <- vector("list", origin$step)
+  rec$codes <- vector("list", origin$step)
   if (id_col %in% names(source)) {
     return(stop_with(lost_identity(NA_character_, "the source has a column named .whence_id")))
   }
@@ -231,6 +255,9 @@ replay_trace <- function(trace) {
   stages <- trace$stage_list
 
   for (i in seq_along(stages)) {
+    if (i <= origin$step) {
+      next
+    }
     stage <- stages[[i]]
     verb <- stage_verb(stage)
     if (is.na(verb) || !verb %in% tracked_verbs) {
@@ -246,6 +273,9 @@ replay_trace <- function(trace) {
     )
     if (is.null(step)) {
       return(stop_with(lost_identity(verb)))
+    }
+    if (!is.null(step$reason)) {
+      return(stop_with(step))
     }
     expected_n <- trace$stages$n[[i + 1L]]
     if (!is.na(expected_n) && !identical(row_count(step$data), expected_n)) {
@@ -266,7 +296,23 @@ replay_trace <- function(trace) {
 #' The source rows with these row numbers, in their original order
 #' @noRd
 source_rows <- function(trace, ids) {
-  trace$source_data[sort(unique(as.integer(ids))), , drop = FALSE]
+  row_origin(trace)$data[sort(unique(as.integer(ids))), , drop = FALSE]
+}
+
+
+# Use local rows only. Remote steps cannot carry a stable hidden id.
+row_origin <- function(trace) {
+  if (!is_lazy_table(trace$source_data)) {
+    return(list(data = trace$source_data, step = 0L))
+  }
+  origin <- trace$row_source
+  if (is.null(origin)) {
+    return(list(reason = "the data is a lazy table"))
+  }
+  origin$prefix_reason <- paste0(
+    "steps before ", origin$verb, "() run ", origin$location
+  )
+  origin
 }
 
 
@@ -291,6 +337,22 @@ key_codes <- function(data, table, keys) {
 replay_stage <- function(stage, verb, data, env, id_map) {
   before_ids <- data[[id_col]]
 
+  if (verb %in% join_verbs) {
+    stage$call <- join_call(stage)
+    y <- eval_stage(
+      list(call = stage$call$y, magrittr = stage$magrittr), data, env
+    )
+    if (id_col %in% names(y)) {
+      return(lost_identity(verb, paste0(
+        "`y` in ", verb, "() has a column named `.whence_id`"
+      )))
+    }
+    # Bind y once so a check for the reserved name does not run it twice.
+    env <- new.env(parent = env)
+    env$.whence_join_y <- y
+    stage$call$y <- quote(.whence_join_y)
+  }
+
   if (verb == "pull") {
     eval_stage(stage, data, env)
     return(list(data = NULL, id_map = id_map, ids = before_ids))
@@ -301,7 +363,11 @@ replay_stage <- function(stage, verb, data, env, id_map) {
   }
 
   stage$call <- keep_id_call(stage$call, verb)
-  out <- eval_stage(stage, data, env)
+  out <- if (verb %in% join_verbs) {
+    suppressWarnings(suppressMessages(eval_stage(stage, data, env)))
+  } else {
+    eval_stage(stage, data, env)
+  }
   check_ids(out, before_ids)
   list(data = out, id_map = id_map, ids = NULL)
 }
@@ -422,14 +488,21 @@ rows_unavailable_reason <- function(trace) {
     }
     trace <- trace$table
   }
+  origin <- row_origin(trace)
+  if (!is.null(origin$reason)) {
+    return(lost_identity(NA_character_, origin$reason)$reason)
+  }
   if (!trace$traced) {
     return(lost_identity(NA_character_, "the pipeline was not traced")$reason)
   }
-  if (id_col %in% names(trace$source_data)) {
+  if (id_col %in% names(origin$data)) {
     return(lost_identity(NA_character_, "the source has a column named .whence_id")$reason)
   }
   verbs <- vapply(trace$stage_list, stage_verb, character(1))
   for (i in seq_along(verbs)) {
+    if (i <= origin$step) {
+      next
+    }
     verb <- verbs[[i]]
     if (is.na(verb) || !verb %in% tracked_verbs || (verb == "pull" && i != length(verbs))) {
       return(lost_identity(verb)$reason)

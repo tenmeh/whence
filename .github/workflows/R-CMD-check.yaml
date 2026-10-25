@@ -34,7 +34,10 @@ jobs:
           - {os: ubuntu-latest,  r: 'oldrel-2'}
           - {os: ubuntu-latest,  r: 'oldrel-3'}
           - {os: ubuntu-latest,  r: 'oldrel-4'}
-          - {os: ubuntu-latest,  r: '4.1'}
+          # 'arrow' and 'duckplyr' (through duckdb) need R >= 4.2. They are
+          # only in Suggests, and their tests skip when they are not
+          # installed, so this job checks without them.
+          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -48,6 +51,11 @@ jobs:
       # CRAN do not always have a headless Chrome. This variable makes the
       # test run here. Without it, the test skips on each system.
       NOT_CRAN: true
+      # A suggested package that cannot be installed on a system (arrow and
+      # duckplyr on R 4.1) must not stop the check. Each test that uses one
+      # calls skip_if_not_installed(). With every package installed, this
+      # changes nothing.
+      _R_CHECK_FORCE_SUGGESTS_: false
 
     steps:
       - uses: actions/checkout@v4
@@ -69,11 +77,15 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: |
+            any::rcmdcheck
+            ${{ matrix.config.ignore }}
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
         with:
-          # CRAN accepts no NOTEs. This check thus accepts none.
-          error-on: '"note"'
+          # CRAN accepts no NOTEs. This check thus accepts none, except on a
+          # job that leaves out a suggested package: R CMD check gives a NOTE
+          # that the package is not available, and that NOTE is expected.
+          error-on: ${{ matrix.config.ignore && '"warning"' || '"note"' }}
           upload-snapshots: true

@@ -64,8 +64,11 @@ whenceTableOutput <- function(outputId, label = NULL) { # nolint: object_name_li
 #'   change, such as `list(total = scales::label_dollar())`.
 #' @inheritParams renderWhence
 #' @export
-renderWhenceTable <- function(expr, format = NULL, env = parent.frame(), quoted = FALSE, # nolint: object_name_linter.
+renderWhenceTable <- function(expr, format = NULL, # nolint: object_name_linter.
+                              lazy = getOption("whence.lazy", "stop"),
+                              env = parent.frame(), quoted = FALSE,
                               outputArgs = list()) { # nolint: object_name_linter. The name is that of shiny.
+  check_lazy(lazy)
   check_table_format(format)
   check_render_args(env, quoted, outputArgs)
   if (!quoted) {
@@ -73,7 +76,7 @@ renderWhenceTable <- function(expr, format = NULL, env = parent.frame(), quoted 
   }
 
   shiny::createRenderFunction(
-    function() trace_expr(expr, env, mode = "table"),
+    function() trace_expr(expr, env, mode = "table", lazy = lazy),
     transform = function(value, session, name, ...) {
       remember_trace(session, name, value, format)
       table_payload(value, format)

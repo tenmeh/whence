@@ -10,6 +10,7 @@ whenceTableOutput(outputId, label = NULL)
 renderWhenceTable(
   expr,
   format = NULL,
+  lazy = getOption("whence.lazy", "stop"),
   env = parent.frame(),
   quoted = FALSE,
   outputArgs = list()
@@ -26,6 +27,9 @@ uses it in its heading too.}
 \item{format}{\code{NULL}, a function for every number column that is not a
 group column, or a named list of functions, one for each column to
 change, such as \code{list(total = scales::label_dollar())}.}
+
+\item{lazy}{How to handle lazy tables: \code{"stop"} or \code{"count"}, with no
+partial matching. Defaults to \code{getOption("whence.lazy", "stop")}.}
 
 \item{env}{The environment in which to evaluate \code{expr}.}
 

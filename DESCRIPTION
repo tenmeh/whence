@@ -1,7 +1,7 @@
 Package: whence
 Type: Package
 Title: Explain Where a Number Came from in 'shiny' Apps
-Version: 0.1.0
+Version: 0.1.0.9000
 Authors@R: person(
     given = "Tanmay",
     family = "Chanda",
@@ -27,9 +27,15 @@ Imports:
     shiny (>= 1.7.0),
     utils
 Suggests:
+    arrow,
+    DBI,
+    dbplyr,
     dplyr,
+    dtplyr,
+    duckplyr,
     ggplot2,
     reactable,
+    RSQLite,
     shinytest2,
     testthat (>= 3.0.0),
     tidyr,

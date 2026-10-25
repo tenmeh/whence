@@ -10,6 +10,7 @@ whenceOutput(outputId, label = NULL)
 renderWhence(
   expr,
   format = NULL,
+  lazy = getOption("whence.lazy", "stop"),
   env = parent.frame(),
   quoted = FALSE,
   outputArgs = list()
@@ -28,6 +29,9 @@ A formatter of 'scales' works, for example \code{scales::label_dollar()}, and
 so does \code{function(x) paste0(round(x), " kg")}. With \code{NULL}, a number gets
 a comma for each thousand, and any other value goes through
 \code{as.character()}.}
+
+\item{lazy}{How to handle lazy tables: \code{"stop"} or \code{"count"}, with no
+partial matching. Defaults to \code{getOption("whence.lazy", "stop")}.}
 
 \item{env}{The environment in which to evaluate \code{expr}.}
 

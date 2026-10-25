@@ -38,7 +38,8 @@
 #' by_cyl
 #' whence_group(by_cyl, 2)
 #' @export
-whence_table <- function(expr, env = parent.frame()) {
+whence_table <- function(expr, env = parent.frame(), lazy = getOption("whence.lazy", "stop")) {
+  check_lazy(lazy)
   quo <- rlang::enquo(expr)
   if (missing(env)) {
     quo_env <- rlang::quo_get_env(quo)
@@ -46,7 +47,7 @@ whence_table <- function(expr, env = parent.frame()) {
       env <- quo_env
     }
   }
-  trace_expr(rlang::quo_get_expr(quo), env, mode = "table")
+  trace_expr(rlang::quo_get_expr(quo), env, mode = "table", lazy = lazy)
 }
 
 
@@ -216,8 +217,22 @@ group_stages <- function(table, replay, row) {
 
   last_summary <- max(c(0L, which(stages$kind %in% aggregate_verbs)))
   previous <- c(NA_integer_, utils::head(n, -1))
-  removal <- !stages$kind %in% c("source", aggregate_verbs, "group_by", "ungroup") & seq_along(n) <= last_summary
+  removal <- !stages$kind %in% c(
+    "source", aggregate_verbs, "group_by", "ungroup", materialising_verbs
+  ) & seq_along(n) <= last_summary
   delta <- ifelse(removal, n - previous, NA_integer_)
+
+  stages$added[] <- NA_integer_
+  for (s in which(stages$kind %in% join_verbs)) {
+    if (is.na(n[[s]]) || is.na(previous[[s]])) {
+      delta[[s]] <- NA_integer_
+      next
+    }
+    before <- unlist(replay$sources[[s - 1L]][replay$codes[[s - 1L]] %in% row])
+    after <- unlist(replay$sources[[s]][replay$codes[[s]] %in% row])
+    delta[[s]] <- -sum(!before %in% after)
+    stages$added[[s]] <- as.integer(n[[s]] - (previous[[s]] + delta[[s]]))
+  }
 
   stages$n <- n
   stages$delta <- as.integer(delta)
@@ -264,6 +279,10 @@ group_label <- function(table, row) {
 #' @noRd
 group_reason <- function(table, replay) {
   if (replay$ok) {
+    origin <- row_origin(table)
+    if (origin$step > 0L) {
+      return(paste0("Counts for this group are not known: ", origin$prefix_reason, "."))
+    }
     return(table$reason)
   }
   sub("^Row attribution unavailable", "Counts for this group are not known", replay$reason)

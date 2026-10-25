@@ -9,23 +9,28 @@
 #' `filter()` or `summarise()`, is a step, and its first argument is the data
 #' that comes from upstream. This works the same for the native pipe `|>`,
 #' for the magrittr pipe `%>%` and for nested calls. The chain stops at the
-#' first call that is not a known verb, such as a join. That call and all
+#' first call that is not a known verb, such as `full_join()`. That call and all
 #' that is upstream of it become the source.
 #'
 #' Each step is evaluated in `env`, as the full expression would be. A step
 #' thus sees the same variables, and in 'shiny' it reads the same inputs and
 #' reactive values.
 #'
-#' The steps run once, in order. This is the same work as running the
-#' expression in one piece.
+#' Step calls are evaluated once, in order. An `inner_join()` also runs an
+#' `anti_join()` to count unmatched rows. Repeated join matches are counted
+#' separately from removed rows in the integer `added` column (`NA` for other
+#' verbs).
 #'
 #' # Limits
 #'
-#' * A database-backed pipeline (a `tbl_lazy` from 'dbplyr') is an error.
-#'   Its steps run as SQL only at `collect()`, so there are no row counts to
-#'   show.
-#' * Joins are not traced. A join ends the chain.
-#' * The verbs of 'data.table', 'arrow' and 'duckplyr' are not known.
+#' * Lazy tables from 'dbplyr', 'arrow', 'dtplyr', and prudent 'duckplyr'
+#'   need `lazy = "count"` to count remote steps. With `lazy = "stop"`, the
+#'   last materialising step becomes the source and only later steps are
+#'   counted. A table that is still lazy gives an error in this mode.
+#'   Default 'duckplyr' data frames work without opting in.
+#' * `right_join()` and `full_join()` end the chain. They can bring in rows
+#'   that are not from the main source.
+#' * Native 'data.table' syntax is not traced.
 #' * The native-pipe placeholder `_` is not supported. A pipeline that uses
 #'   it is not split, and the value is still given.
 #'
@@ -36,12 +41,32 @@
 #' `slice_min()`, `slice_max()`, `slice_sample()`, `group_by()`, `ungroup()`,
 #' `summarise()`, `summarize()`, `count()`, `tally()`, `distinct()`,
 #' `drop_na()`, `pivot_longer()`, `pivot_wider()`, `pull()`, `head()` and
-#' `tail()`, with or without a namespace such as `dplyr::`. Any other call
-#' ends the chain, and the trace says where in its `reason`.
+#' `tail()`. Joins `inner_join()`, `left_join()`, `semi_join()` and
+#' `anti_join()` are steps too. Materialising verbs `collect()`, `compute()`,
+#' `as_tibble()` and `as.data.frame()` keep rows and are hidden in the
+#' waterfall. All work with or without a namespace such as `dplyr::`.
+#' Any other call ends the chain, and the trace says where in its `reason`.
+#'
+#' # Lazy tables
+#'
+#' Use `lazy = "count"` to trace a lazy pipeline without collecting every
+#' intermediate table. This runs one count query for the source and one for
+#' each lazy step, plus one for each `inner_join()` to count unmatched rows.
+#' Local steps need no count query. The final result is collected to give
+#' the value or table. The reproduce code includes this final `collect()`.
+#' Count queries and the final collection can be costly on large tables.
+#' Each count can run the upstream query again.
+#'
+#' Set `options(whence.lazy = "count")` to use this mode by default, including
+#' in the render functions. `lazy = "stop"` keeps the default behaviour.
+#' Row attribution starts only after a materialising step in the pipeline;
+#' it cannot identify rows of a remote source. See [whence_rows()].
 #'
 #' @param expr A pipeline that ends in a single value: a vector of length
 #'   one, or a data frame with one row and one column.
 #' @param env The environment in which to evaluate `expr`.
+#' @param lazy How to handle lazy tables: `"stop"` or `"count"`, with no
+#'   partial matching. Defaults to `getOption("whence.lazy", "stop")`.
 #'
 #' @return A `whence_trace` object. Use [whence_value()], [whence_code()],
 #'   [whence_rows()], `as.data.frame()` and `print()` with it.
@@ -69,7 +94,8 @@
 #' trace
 #' as.data.frame(trace)
 #' @export
-whence_trace <- function(expr, env = parent.frame()) {
+whence_trace <- function(expr, env = parent.frame(), lazy = getOption("whence.lazy", "stop")) {
+  check_lazy(lazy)
   quo <- rlang::enquo(expr)
   if (missing(env)) {
     quo_env <- rlang::quo_get_env(quo)
@@ -77,13 +103,14 @@ whence_trace <- function(expr, env = parent.frame()) {
       env <- quo_env
     }
   }
-  trace_expr(rlang::quo_get_expr(quo), env)
+  trace_expr(rlang::quo_get_expr(quo), env, lazy = lazy)
 }
 
 
 #' Run the count pass on an unevaluated expression
 #' @noRd
-trace_expr <- function(expr, env, mode = "value") {
+trace_expr <- function(expr, env, mode = "value", lazy = getOption("whence.lazy", "stop")) {
+  check_lazy(lazy)
   if (rlang::is_quosure(expr)) {
     env <- rlang::quo_get_env(expr)
     expr <- rlang::quo_get_expr(expr)
@@ -100,43 +127,100 @@ trace_expr <- function(expr, env, mode = "value") {
   parts <- decompose_pipeline(expr)
 
   current <- eval(parts$source, env)
-  check_not_lazy(current)
+  materialised_at <- NULL
+  if (is_lazy_table(current) && lazy == "stop") {
+    lazy_location <- lazy_table_kind(current)$location
+    verbs <- vapply(parts$stages, stage_verb, "")
+    materialisers <- which(verbs %in% materialising_verbs)
+    if (length(materialisers) == 0) {
+      stop_lazy_table(current)
+    }
+    last <- max(materialisers)
+    materialised_at <- stage_verb(parts$stages[[last]])
+    # Keep the lazy prefix as the source, without evaluating the source twice.
+    for (i in seq_len(last)) {
+      stage <- parts$stages[[i]]
+      current <- eval_stage(stage, current, env)
+      if (stage$magrittr && "." %in% all.names(stage$call)) {
+        body <- replace_symbol(stage$call, placeholder_sym, quote(.))
+        fn <- as.call(list(quote(`function`), as.pairlist(alist(. = )), body))
+        parts$source <- as.call(list(fn, parts$source))
+      } else {
+        parts$source <- replace_symbol(stage$call, placeholder_sym, parts$source)
+      }
+    }
+    parts$stages <- parts$stages[-seq_len(last)]
+  }
+  if (is_lazy_table(current) && lazy == "stop") {
+    stop_lazy_table(current)
+  }
   source_data <- current
+  lazy_source <- is_lazy_table(source_data)
+  row_source <- NULL
 
   # The identity pass replays the stages later. slice_sample() draws random
   # numbers, so the replay must start from the same random state.
   seed <- save_seed(parts$stages)
 
-  records <- list(source_record(parts$source, current, env))
+  current_n <- row_count(current, lazy)
+  records <- list(source_record(parts$source, current, env, n = current_n))
   keys <- NULL
   for (i in seq_along(parts$stages)) {
     stage <- parts$stages[[i]]
     stage$call <- substitute_inputs(stage$call, env)
     parts$stages[[i]] <- stage
     before <- current
+    before_n <- current_n
     current <- eval_stage(stage, current, env)
-    check_not_lazy(current)
-    records <- c(records, list(stage_record(stage, before, current, env)))
+    if (is_lazy_table(current) && lazy == "stop") {
+      stop_lazy_table(current)
+    }
+    # Reuse the upstream count. Labels and percentages must not issue queries.
+    current_n <- row_count(current, lazy)
+    records <- c(records, list(stage_record(
+      stage, before, current, env, before_n = before_n, n = current_n, lazy = lazy
+    )))
+    # Rows can be found only from the first step that returns local data.
+    first_local <- lazy_source && is.null(row_source) &&
+      stage_verb(stage) %in% materialising_verbs && is.data.frame(current) && !is_lazy_table(current)
+    if (first_local) {
+      row_source <- list(
+        data = current, step = i, verb = stage_verb(stage),
+        location = lazy_table_kind(source_data)$location
+      )
+    }
     if (stage_verb(stage) %in% aggregate_verbs) {
       # The groups of the last summary are the rows of a table.
       keys <- aggregate_keys(stage, stage_verb(stage), before, current)
     }
   }
 
+  collected_result <- is_lazy_table(current)
+  if (collected_result) {
+    current <- dplyr::collect(current)
+  }
   value <- if (identical(mode, "table")) extract_table(current) else extract_scalar(current)
+  code <- build_code(parts$source, parts$stages, env, seed)
+  if (collected_result) {
+    code <- paste0(code, " |>\n  dplyr::collect()")
+  }
 
   structure(
     list(
       value = value,
       stages = bind_records(records),
       keys = if (identical(mode, "table")) table_keys(keys, value) else NULL,
-      code = build_code(parts$source, parts$stages, env, seed),
-      traced = is.data.frame(source_data) && length(parts$stages) > 0,
-      reason = trace_reason(parts$source, length(parts$stages), source_data),
+      code = code,
+      traced = (is.data.frame(source_data) || lazy_source) && length(parts$stages) > 0,
+      reason = if (!is.null(materialised_at)) paste0(
+        "Steps before ", materialised_at,
+        "() run ", lazy_location, ", so they are not counted."
+      ) else trace_reason(parts$source, length(parts$stages), source_data),
       expr = expr,
       source = parts$source,
       stage_list = parts$stages,
       source_data = source_data,
+      row_source = row_source,
       env = env,
       seed = seed
     ),
@@ -154,7 +238,7 @@ trace_expr <- function(expr, env, mode = "value") {
 #' @noRd
 aggregate_keys <- function(stage, verb, before, after) {
   if (verb == "count") {
-    return(utils::head(names(after), -1))
+    return(utils::head(column_names(after), -1))
   }
   if (is_grouped(before)) {
     return(group_names(before))
@@ -164,14 +248,14 @@ aggregate_keys <- function(stage, verb, before, after) {
   }
   arg_names <- names(stage$call)[-(1:2)] %||% character(0)
   summary_names <- arg_names[nzchar(arg_names) & !arg_names %in% c(".by", "by", ".groups")]
-  setdiff(intersect(names(after), names(before)), summary_names)
+  setdiff(intersect(column_names(after), column_names(before)), summary_names)
 }
 
 
 #' The group columns of a table, when every one of them is in the table
 #' @noRd
 table_keys <- function(keys, value) {
-  if (length(keys) == 0 || !all(keys %in% names(value))) {
+  if (length(keys) == 0 || !all(keys %in% column_names(value))) {
     return(NULL)
   }
   keys
@@ -196,7 +280,7 @@ extract_table <- function(x) {
 #' @noRd
 trace_reason <- function(source, n_stages, source_data) {
   stop_at <- stop_point(source)
-  if (n_stages > 0 && is.data.frame(source_data)) {
+  if (n_stages > 0 && (is.data.frame(source_data) || is_lazy_table(source_data))) {
     if (is.null(stop_at)) {
       return(NULL)
     }
@@ -254,6 +338,31 @@ eval_stage <- function(stage, data, env) {
 # never report a negative delta.
 aggregate_verbs <- c("summarise", "count", "tally")
 
+
+# Match positional join options before dropping options for mutating joins.
+join_call <- function(stage) {
+  match.call(
+    function(x, y, by = NULL, copy = FALSE, suffix = NULL, ..., keep = NULL) NULL,
+    stage$call,
+    expand.dots = TRUE
+  )
+}
+
+
+anti_join_stage <- function(stage) {
+  call <- join_call(stage)
+  fn <- call[[1]]
+  if (is.call(fn)) {
+    fn[[3]] <- as.symbol("anti_join")
+  } else {
+    fn <- as.symbol("anti_join")
+  }
+  args <- as.list(call)[-1]
+  args <- args[names(args) %in% c("x", "y", "by", "copy", "na_matches")]
+  stage$call <- as.call(c(list(fn), args))
+  stage
+}
+
 # Arguments of count() that do not name a group.
 count_options <- c("wt", "sort", "name", ".drop")
 
@@ -270,10 +379,10 @@ stage_verb <- function(stage) {
 
 
 #' @noRd
-source_record <- function(source, data, env) {
+source_record <- function(source, data, env, n = row_count(data)) {
   new_record(
     label = deparse_one(substitute_inputs(source, env)),
-    n = row_count(data),
+    n = n,
     delta = NA_integer_,
     kind = "source",
     verb = NA_character_,
@@ -285,12 +394,27 @@ source_record <- function(source, data, env) {
 
 
 #' @noRd
-stage_record <- function(stage, before, after, env) {
+stage_record <- function(stage, before, after, env, before_n = row_count(before, lazy),
+                         n = row_count(after, lazy), lazy = "stop") {
   verb <- stage_verb(stage)
   kind <- if (!is.na(verb) && verb %in% whence_verbs) verb else "other"
-  n <- row_count(after)
-  delta <- n - row_count(before)
+  delta <- n - before_n
+  added <- NA_integer_
   shown <- TRUE
+
+  if (kind %in% join_verbs) {
+    added <- 0L
+    if (kind == "left_join") {
+      delta <- 0L
+      added <- n - before_n
+    } else if (kind == "inner_join") {
+      unmatched <- suppressWarnings(suppressMessages(
+        eval_stage(anti_join_stage(stage), before, env)
+      ))
+      delta <- -suppressWarnings(suppressMessages(row_count(unmatched, lazy)))
+      added <- n - (before_n + delta)
+    }
+  }
 
   if (kind %in% aggregate_verbs) {
     delta <- NA_integer_
@@ -298,13 +422,13 @@ stage_record <- function(stage, before, after, env) {
   if (kind %in% c("group_by", "ungroup")) {
     # A metadata step. It is shown only when it changes the groups.
     delta <- NA_integer_
-    shown <- group_count(before) != group_count(after) ||
+    shown <- !identical(group_count(before), group_count(after)) ||
       !identical(group_names(before), group_names(after))
   }
-  if (kind == "pull") {
+  if (kind %in% c("pull", materialising_verbs)) {
+    delta <- NA_integer_
     shown <- FALSE
   }
-  before_n <- row_count(before)
   percent <- if (is.na(delta) || delta == 0 || is.na(before_n) || before_n == 0) {
     NA_real_
   } else {
@@ -312,20 +436,22 @@ stage_record <- function(stage, before, after, env) {
   }
 
   new_record(
-    label = stage_label(stage, kind, before, after, env),
+    label = stage_label(stage, kind, before, after, env, n = n),
     n = n,
     delta = delta,
     kind = kind,
     verb = stage$verb,
     groups = if (is_grouped(after)) group_count(after) else NA_integer_,
     shown = shown,
-    percent = percent
+    percent = percent,
+    added = added
   )
 }
 
 
 #' @noRd
-new_record <- function(label, n, delta, kind, verb, groups, shown, percent) {
+new_record <- function(label, n, delta, kind, verb, groups, shown, percent,
+                       added = NA_integer_) {
   data.frame(
     label = label,
     n = as.integer(n),
@@ -335,6 +461,7 @@ new_record <- function(label, n, delta, kind, verb, groups, shown, percent) {
     verb = verb,
     groups = as.integer(groups),
     shown = shown,
+    added = as.integer(added),
     stringsAsFactors = FALSE
   )
 }
@@ -364,7 +491,7 @@ format_percent <- function(percent) {
 
 #' The label of a stage in the waterfall
 #' @noRd
-stage_label <- function(stage, kind, before, after, env) {
+stage_label <- function(stage, kind, before, after, env, n = row_count(after)) {
   call <- substitute_inputs(stage_display_call(stage), env)
   args <- as.list(call)[-1]
 
@@ -373,7 +500,6 @@ stage_label <- function(stage, kind, before, after, env) {
   }
 
   if (kind %in% aggregate_verbs) {
-    n <- row_count(after)
     noun <- if (identical(n, 1L)) "row" else "rows"
     lead <- if (is_group_aggregate(stage, kind, before)) {
       "grouped into"

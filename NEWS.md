@@ -1,3 +1,22 @@
+# whence (development version)
+
+* `whence_trace()`, `whence_table()` and the render functions accept
+  `lazy = "count"` to count each step of a lazy pipeline. Each lazy step
+  needs a count query, with an extra query for each inner join. Use
+  `options(whence.lazy = "count")` to opt in by default. Row attribution
+  starts from the first materialising step that returns a data frame.
+
+* `whence_trace()` follows `collect()`, `compute()`, `as_tibble()` and
+  `as.data.frame()` as hidden steps that keep rows. For lazy sources, the
+  last materialising step becomes the source and later steps are traced.
+
+* `whence_trace()` gives a clear error for lazy tables from 'dbplyr',
+  'arrow', 'dtplyr' and prudent 'duckplyr' that still need materialisation.
+
+* `whence_trace()` traces `inner_join()`, `left_join()`, `semi_join()` and
+  `anti_join()`. Counts show removals and repeated matches separately.
+  `whence_rows()` finds contributing and removed rows of the main source.
+
 # whence 0.1.0
 
 * Initial CRAN submission.

@@ -68,6 +68,12 @@ format.whence_trace <- function(x, ...) {
       }
       paste0(format_signed(d), " rows", if (nzchar(pct[[i]])) paste0(" (", pct[[i]], ")") else "")
     }, "")
+    repeated <- !is.na(stages$added) & stages$added > 0
+    delta_text[repeated] <- paste0(
+      delta_text[repeated], "  +", format_count(stages$added[repeated]),
+      ifelse(stages$added[repeated] == 1L, " row", " rows"),
+      " from repeated matches"
+    )
     label <- ifelse(stages$kind == "source", stages$label, paste("->", stages$label))
     # The number of each step, as whence_rows(step = ) takes it. A hidden
     # step keeps its number, so the numbers can have gaps.

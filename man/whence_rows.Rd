@@ -31,6 +31,16 @@ rows that contribute to the value: for
 \details{
 For a group from \code{\link[=whence_group]{whence_group()}}, both are limited to the rows of that
 group.
+After a join, contributing rows are rows of the main source (\code{x}) only.
+Repeated matches return each source row once. Rows from \code{y} are not shown.
+
+With \code{lazy = "count"}, a lazy source has no row attribution until a
+materialising step such as \code{collect()} returns a data frame. The identity
+pass starts from that data frame and follows only later steps. Returned
+rows are rows of that collected data frame, not rows of the remote source.
+Requests for earlier steps (or the materialising step itself) give \code{NULL}
+with a \code{whence_rows_unavailable} warning. Without a materialising step,
+rows are unavailable, even though the final value or table is collected.
 
 The function replays the pipeline with a hidden id column on a copy of
 the source. \code{\link[=whence_trace]{whence_trace()}} never does this, so the waterfall costs
