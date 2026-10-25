@@ -34,7 +34,9 @@ jobs:
           - {os: ubuntu-latest,  r: 'oldrel-2'}
           - {os: ubuntu-latest,  r: 'oldrel-3'}
           - {os: ubuntu-latest,  r: 'oldrel-4'}
-          - {os: ubuntu-latest,  r: '4.1'}
+          # 'arrow' needs R >= 4.2. It is only in Suggests, and its tests
+          # skip when it is not installed, so this job checks without it.
+          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -48,6 +50,11 @@ jobs:
       # CRAN do not always have a headless Chrome. This variable makes the
       # test run here. Without it, the test skips on each system.
       NOT_CRAN: true
+      # A suggested package that cannot be installed on a system (arrow on
+      # R 4.1) must not stop the check. Each test that uses one calls
+      # skip_if_not_installed(). With every package installed, this changes
+      # nothing.
+      _R_CHECK_FORCE_SUGGESTS_: false
 
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +76,9 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: |
+            any::rcmdcheck
+            ${{ matrix.config.ignore }}
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
