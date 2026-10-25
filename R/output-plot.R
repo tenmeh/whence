@@ -77,8 +77,10 @@ whencePlotOutput <- function(outputId, label = NULL, width = "100%", height = "4
 #' @inheritParams renderWhence
 #' @export
 renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height = "auto", # nolint: object_name_linter.
-                             res = 72, alt = NA, env = parent.frame(), quoted = FALSE,
+                             res = 72, alt = NA, lazy = getOption("whence.lazy", "stop"),
+                             env = parent.frame(), quoted = FALSE,
                              outputArgs = list()) { # nolint: object_name_linter. The name is that of shiny.
+  check_lazy(lazy)
   if (!is.function(plot)) {
     stop("`plot` must be a function that takes the summary table, not ", class(plot)[1], ".", call. = FALSE)
   }
@@ -93,7 +95,7 @@ renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height =
   # data", and draws the plot.
   draw_env <- new.env(parent = env)
   draw_env$.whence_draw <- function() {
-    trace <- trace_expr(expr, env, mode = "table")
+    trace <- trace_expr(expr, env, mode = "table", lazy = lazy)
     drawn <- plot(trace$value)
     # The x and y of each row, from the plot itself. A click is matched to
     # these, so the text of the click data is never evaluated.

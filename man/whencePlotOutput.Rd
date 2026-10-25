@@ -15,6 +15,7 @@ renderWhencePlot(
   height = "auto",
   res = 72,
   alt = NA,
+  lazy = getOption("whence.lazy", "stop"),
   env = parent.frame(),
   quoted = FALSE,
   outputArgs = list()
@@ -36,6 +37,9 @@ uses it in its heading too.}
 and the panels.}
 
 \item{res, alt}{As for \code{\link[shiny:renderPlot]{shiny::renderPlot()}}.}
+
+\item{lazy}{How to handle lazy tables: \code{"stop"} or \code{"count"}, with no
+partial matching. Defaults to \code{getOption("whence.lazy", "stop")}.}
 
 \item{env}{The environment in which to evaluate \code{expr}.}
 

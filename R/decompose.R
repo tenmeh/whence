@@ -12,6 +12,12 @@
 # real call, so each of its right-hand sides is a stage.
 
 
+# Materialising verbs keep local rows and mark the end of a lazy prefix.
+materialising_verbs <- c("collect", "compute", "as_tibble", "as.data.frame")
+
+# These joins keep the link to rows of the main source.
+join_verbs <- c("inner_join", "left_join", "semi_join", "anti_join")
+
 # The verbs whose row semantics whence knows. A call to one of these is a
 # stage. Its first argument is the upstream data.
 whence_verbs <- c(
@@ -19,7 +25,7 @@ whence_verbs <- c(
   "slice", "slice_head", "slice_tail", "slice_min", "slice_max",
   "slice_sample", "group_by", "ungroup", "summarise", "summarize",
   "count", "tally", "distinct", "drop_na", "head", "tail",
-  "pivot_longer", "pivot_wider", "pull"
+  "pivot_longer", "pivot_wider", "pull", materialising_verbs, join_verbs
 )
 
 # The names that the first argument of a verb can have. The native pipe puts

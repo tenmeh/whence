@@ -4,13 +4,20 @@
 \alias{whence_trace}
 \title{Trace where a number came from}
 \usage{
-whence_trace(expr, env = parent.frame())
+whence_trace(
+  expr,
+  env = parent.frame(),
+  lazy = getOption("whence.lazy", "stop")
+)
 }
 \arguments{
 \item{expr}{A pipeline that ends in a single value: a vector of length
 one, or a data frame with one row and one column.}
 
 \item{env}{The environment in which to evaluate \code{expr}.}
+
+\item{lazy}{How to handle lazy tables: \code{"stop"} or \code{"count"}, with no
+partial matching. Defaults to \code{getOption("whence.lazy", "stop")}.}
 }
 \value{
 A \code{whence_trace} object. Use \code{\link[=whence_value]{whence_value()}}, \code{\link[=whence_code]{whence_code()}},
@@ -40,23 +47,28 @@ The pipeline is split by its verbs. A call to a known verb, such as
 \code{filter()} or \code{summarise()}, is a step, and its first argument is the data
 that comes from upstream. This works the same for the native pipe \verb{|>},
 for the magrittr pipe \verb{\%>\%} and for nested calls. The chain stops at the
-first call that is not a known verb, such as a join. That call and all
+first call that is not a known verb, such as \code{full_join()}. That call and all
 that is upstream of it become the source.
 
 Each step is evaluated in \code{env}, as the full expression would be. A step
 thus sees the same variables, and in 'shiny' it reads the same inputs and
 reactive values.
 
-The steps run once, in order. This is the same work as running the
-expression in one piece.
+Step calls are evaluated once, in order. An \code{inner_join()} also runs an
+\code{anti_join()} to count unmatched rows. Repeated join matches are counted
+separately from removed rows in the integer \code{added} column (\code{NA} for other
+verbs).
 }
 \section{Limits}{
 \itemize{
-\item A database-backed pipeline (a \code{tbl_lazy} from 'dbplyr') is an error.
-Its steps run as SQL only at \code{collect()}, so there are no row counts to
-show.
-\item Joins are not traced. A join ends the chain.
-\item The verbs of 'data.table', 'arrow' and 'duckplyr' are not known.
+\item Lazy tables from 'dbplyr', 'arrow', 'dtplyr', and prudent 'duckplyr'
+need \code{lazy = "count"} to count remote steps. With \code{lazy = "stop"}, the
+last materialising step becomes the source and only later steps are
+counted. A table that is still lazy gives an error in this mode.
+Default 'duckplyr' data frames work without opting in.
+\item \code{right_join()} and \code{full_join()} end the chain. They can bring in rows
+that are not from the main source.
+\item Native 'data.table' syntax is not traced.
 \item The native-pipe placeholder \verb{_} is not supported. A pipeline that uses
 it is not split, and the value is still given.
 }
@@ -68,8 +80,26 @@ These calls are steps: \code{filter()}, \code{mutate()}, \code{transmute()}, \co
 \code{slice_min()}, \code{slice_max()}, \code{slice_sample()}, \code{group_by()}, \code{ungroup()},
 \code{summarise()}, \code{summarize()}, \code{count()}, \code{tally()}, \code{distinct()},
 \code{drop_na()}, \code{pivot_longer()}, \code{pivot_wider()}, \code{pull()}, \code{head()} and
-\code{tail()}, with or without a namespace such as \verb{dplyr::}. Any other call
-ends the chain, and the trace says where in its \code{reason}.
+\code{tail()}. Joins \code{inner_join()}, \code{left_join()}, \code{semi_join()} and
+\code{anti_join()} are steps too. Materialising verbs \code{collect()}, \code{compute()},
+\code{as_tibble()} and \code{as.data.frame()} keep rows and are hidden in the
+waterfall. All work with or without a namespace such as \verb{dplyr::}.
+Any other call ends the chain, and the trace says where in its \code{reason}.
+}
+
+\section{Lazy tables}{
+Use \code{lazy = "count"} to trace a lazy pipeline without collecting every
+intermediate table. This runs one count query for the source and one for
+each lazy step, plus one for each \code{inner_join()} to count unmatched rows.
+Local steps need no count query. The final result is collected to give
+the value or table. The reproduce code includes this final \code{collect()}.
+Count queries and the final collection can be costly on large tables.
+Each count can run the upstream query again.
+
+Set \code{options(whence.lazy = "count")} to use this mode by default, including
+in the render functions. \code{lazy = "stop"} keeps the default behaviour.
+Row attribution starts only after a materialising step in the pipeline;
+it cannot identify rows of a remote source. See \code{\link[=whence_rows]{whence_rows()}}.
 }
 
 \examples{

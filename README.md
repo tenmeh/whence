@@ -36,16 +36,20 @@ $4,281,330
 
 Read these first.
 
-- **Database-backed pipelines are not supported.** With 'dbplyr', the steps
-  become SQL and nothing runs until `collect()`. There are thus no row
-  counts to show for each step. `whence` stops with an error for a
-  `tbl_lazy`, and does not show a waterfall that would mislead. This
-  excludes many large dashboards.
-- **Joins are not traced.** A join ends the chain. The join and everything
-  upstream of it become the source row of the waterfall.
+- **Lazy tables need one setting.** With 'dbplyr', 'arrow', 'dtplyr' or a
+  stingy 'duckplyr' table, the steps run only at `collect()`. By default,
+  the waterfall starts at the last `collect()` and counts only the steps
+  after it. Set `lazy = "count"`, or `options(whence.lazy = "count")`, to
+  count every step. whence then runs one count query for each step. The
+  rows behind the number are still available only after `collect()`.
+- **Four joins are traced:** `inner_join()`, `left_join()`, `semi_join()`
+  and `anti_join()`. Repeated matches are shown apart from removed rows.
+  Contributing rows come from the main source (`x`) only. `right_join()`
+  and `full_join()` end the chain and become the source.
 - **Window functions** (a `mutate()` after `group_by()` that reads other
   rows) are counted correctly. Their row attribution has no clear meaning.
-- The verbs of 'data.table', 'arrow' and 'duckplyr' are not known.
+- Native 'data.table' syntax is not traced. Default 'duckplyr' data frames
+  work with the known verbs.
 - A table or a plot is explained row by row when it is the result of a
   summary step (`summarise()`, `count()` or `tally()`) that keeps its group
   columns. A plot must be a 'ggplot2' plot of that table.

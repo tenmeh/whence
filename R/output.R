@@ -85,6 +85,7 @@ whenceOutput <- function(outputId, label = NULL) { # nolint: object_name_linter.
 
 
 #' @rdname whenceOutput
+#' @inheritParams whence_trace
 #' @param expr A pipeline that ends in a single value.
 #' @param format A function that takes the value and gives the text to show.
 #'   A formatter of 'scales' works, for example `scales::label_dollar()`, and
@@ -98,8 +99,10 @@ whenceOutput <- function(outputId, label = NULL) { # nolint: object_name_linter.
 #'   `label`, when the render is used in an R Markdown document with
 #'   `runtime: shiny`.
 #' @export
-renderWhence <- function(expr, format = NULL, env = parent.frame(), quoted = FALSE, # nolint: object_name_linter.
+renderWhence <- function(expr, format = NULL, lazy = getOption("whence.lazy", "stop"), # nolint: object_name_linter.
+                         env = parent.frame(), quoted = FALSE,
                          outputArgs = list()) { # nolint: object_name_linter. The name is that of shiny.
+  check_lazy(lazy)
   if (!is.null(format) && !is.function(format)) {
     stop("`format` must be a function or `NULL`, not ", class(format)[1], ".", call. = FALSE)
   }
@@ -109,7 +112,7 @@ renderWhence <- function(expr, format = NULL, env = parent.frame(), quoted = FAL
   }
 
   shiny::createRenderFunction(
-    function() trace_expr(expr, env),
+    function() trace_expr(expr, env, lazy = lazy),
     transform = function(value, session, name, ...) {
       remember_trace(session, name, value, format)
       explain_payload(value, format)
