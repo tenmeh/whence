@@ -1,6 +1,8 @@
 # whence <img src="man/figures/logo.png" align="right" height="139" alt="whence logo" />
 
 <!-- badges: start -->
+[![CRAN status](https://www.r-pkg.org/badges/version/whence)](https://CRAN.R-project.org/package=whence)
+[![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/whence)](https://CRAN.R-project.org/package=whence)
 [![R-CMD-check](https://github.com/tenmeh/whence/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/tenmeh/whence/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
@@ -49,6 +51,14 @@ Read these first.
   columns. A plot must be a 'ggplot2' plot of that table.
 
 ## Installation
+
+Install the released version from CRAN:
+
+```r
+install.packages("whence")
+```
+
+To get the development version from GitHub:
 
 ```r
 # install.packages("pak")
