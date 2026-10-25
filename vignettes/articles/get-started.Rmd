@@ -18,7 +18,13 @@ number again.
 
 ## Install
 
-`whence` is not on CRAN yet. Install it from GitHub:
+Install `whence` from CRAN:
+
+```{r, eval = FALSE}
+install.packages("whence")
+```
+
+To get the development version from GitHub:
 
 ```{r, eval = FALSE}
 # install.packages("pak")
