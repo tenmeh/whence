@@ -42,6 +42,37 @@ template:
     line-height-base: 1.66
     border-radius: "14px"
 
+  # The picture that Slack, LinkedIn, X and WhatsApp show when the address of
+  # the site is shared. Without it pkgdown uses the logo, which is a small
+  # hex and looks lost in a wide preview. The files are in pkgdown/assets, so
+  # they are copied to the root of the site, and a relative src is made
+  # absolute with the url above. pkgdown allows one image only, and it is the
+  # GIF: Slack and Discord play it, so the hex moves in the preview. Frame 0
+  # of the GIF is the still card.png, so LinkedIn, X, WhatsApp and iMessage,
+  # which do not animate, show that. card.png is kept in the repository as the
+  # still, and as the source of truth if the GIF is made again. card.png is
+  # also the social preview of the repository on GitHub. Both are made by
+  # scripts/site-card in the repository of the blog (tenmeh.github.io), as
+  # for rewind and bones. Make them again there if the tagline below, or the
+  # look of the site, changes.
+  opengraph:
+    image:
+      src: card.gif
+      alt: "The word whence in large letters with the tagline Explain where a number came from in Shiny, beside the purple whence hex logo, with a revenue number that a pointer clicks and a panel that shows where the rows went."
+
+  # X shows the large picture only when the page says so with twitter:card.
+  # pkgdown can write that tag from "opengraph: twitter:", but it then
+  # refuses to build unless the block also names a "creator" or a "site", and
+  # that is an account on X, which this package does not have. So the tag is
+  # written here by hand, as in rewind and bones. The description is the same
+  # text as home: description below, so that a preview has a line of text
+  # under the title on every page. Change both places together.
+  includes:
+    in_header: |
+      <meta name="twitter:card" content="summary_large_image">
+      <meta property="og:description" content="Click a number in a Shiny dashboard and see where its data went: how many rows each step of the pipeline removed, and the code that makes the number again.">
+      <meta name="twitter:description" content="Click a number in a Shiny dashboard and see where its data went: how many rows each step of the pipeline removed, and the code that makes the number again.">
+
 home:
   title: Explain where a number came from in Shiny
   description: >
