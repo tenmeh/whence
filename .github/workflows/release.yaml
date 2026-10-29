@@ -9,6 +9,12 @@
 # main that the tarball was built from (see .github/scripts/find-release-commit.sh).
 # The release notes are the section of NEWS.md for that version.
 #
+# Do not change the files in .github/workflows between the submission and
+# the release. The token of this workflow may not make a tag on a commit
+# whose workflow files differ from those on main: GitHub refuses with
+# "HTTP 403: Resource not accessible by integration". whence 0.1.0 met this,
+# and its release was made by hand with `gh release create`.
+#
 # A version released on GitHub only is not on CRAN, so the daily run does
 # not see it. Run the workflow by hand for that, with the
 # version in the "version" field. It then tags the head of main, which must
