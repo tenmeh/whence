@@ -218,3 +218,9 @@ could replace a name that a verb reads as a column.
   a tool for the analyst. `whence` is a tool for the viewer of a dashboard:
   one click, no change to the pipeline, counts and not identities.
 - 'dplyneage' traces the lineage of columns.
+
+## Support
+
+`whence` is free and open source, and I work on it in my own time. If it
+helps you or your team, you can
+[sponsor my work on GitHub](https://github.com/sponsors/tenmeh).
