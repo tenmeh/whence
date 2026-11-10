@@ -589,3 +589,26 @@ test_that("a plot that renders again closes its open panel", {
   expect_identical(js(app, "document.querySelector('.whence-backdrop') === null"), TRUE)
   expect_no_shiny_errors(app)
 })
+
+test_that("opening 'Show the data' brings the table into view", {
+  skip_on_cran()
+  local_dplyr()
+  skip_if_not_installed("ggplot2")
+  app <- local_app_driver(app_path(), name = "plot-data-scroll")
+  app$wait_for_js("document.querySelector('#plot_region-whence-table tbody tr') !== null", timeout = 20000)
+
+  # Put the plot far below the fold, then open its data from the top.
+  app$run_js("
+    document.querySelector('.whence-plot').style.marginTop = '3000px';
+    window.scrollTo(0, 0);
+    document.querySelector('.whence-plot-data').open = true;
+  ")
+  in_view <- "(function () {
+    var r = document.querySelector('.whence-plot-data').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight;
+  })()"
+  app$wait_for_js(in_view, timeout = 5000)
+
+  expect_identical(js(app, in_view), TRUE)
+  expect_no_shiny_errors(app)
+})

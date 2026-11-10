@@ -48,6 +48,18 @@ ui <- fluidPage(
       )
     ),
     mainPanel(
+      # In the live demo, R starts in the browser. Until the first value
+      # arrives, the outputs are grey and the app looks broken, so say why.
+      tags$p(
+        id = "demo-starting",
+        class = "alert alert-info",
+        role = "status",
+        "Starting R. In the live demo this can take up to a minute,",
+        "and the values stay grey until it is ready."
+      ),
+      tags$script(
+        "$(document).one('shiny:value', function () { $('#demo-starting').remove(); });"
+      ),
       tags$p("Click a number to see where it came from."),
       tags$h3(whenceOutput("revenue", label = "Revenue")),
       tags$h3(whenceOutput("orders", label = "Orders")),

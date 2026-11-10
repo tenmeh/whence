@@ -1,5 +1,12 @@
 # whence (development version)
 
+* The demo app says that R is still starting until the first value arrives.
+  In the live demo, R starts in the browser and the values stay grey for up
+  to a minute (#15).
+
+* `whencePlotOutput()`: opening "Show the data" scrolls its table into view.
+  It opens below the plot, often below the fold (#15).
+
 * `whence_trace()`, `whence_table()` and the render functions accept
   `lazy = "count"` to count each step of a lazy pipeline. Each lazy step
   needs a count query, with an extra query for each inner join. Use

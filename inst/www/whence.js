@@ -738,6 +738,17 @@
 
   // --- Registration -----------------------------------------------------
 
+  // "Show the data" opens its table below the plot, often below the fold, and
+  // then it looks as if nothing happened. Bring the table into view. The
+  // toggle event does not bubble, so it is caught on the way down.
+  function onPlotDataToggle(event) {
+    var details = event.target;
+    if (!details.classList || !details.classList.contains("whence-plot-data") || !details.open) {
+      return;
+    }
+    details.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   function register() {
     var binding = new Shiny.OutputBinding();
     binding.find = function (scope) {
@@ -766,6 +777,7 @@
     $(document).on("shiny:unbound", onUnbound);
     $(document).on("shiny:inputchanged", onInputChanged);
     document.addEventListener("keydown", onDocumentKey);
+    document.addEventListener("toggle", onPlotDataToggle, true);
   }
 
   if (window.Shiny && window.Shiny.OutputBinding) {
