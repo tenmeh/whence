@@ -38,7 +38,7 @@ server <- function(input, output, session) {
   output$customers <- renderWhence(
     sales |>
       filter(region == input$region) |>
-      distinct(customer) |>
+      distinct(name = toupper(customer)) |>
       summarise(n = n())
   )
   # renderUI() makes the output again, with the same id, at each rebuild.

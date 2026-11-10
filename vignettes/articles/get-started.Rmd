@@ -247,15 +247,19 @@ whence_trace(
 
 The waterfall needs only counts. To find *which* rows make the value,
 `whence_rows()` runs the steps again with a hidden id column. Some steps
-break the link between a row and the source. After `distinct()`, a pivot of
-'tidyr', or a step that is not a known verb, `whence_rows()` gives `NULL`
-with a warning that names the step. The waterfall still works.
+break the link between a row and the source. After a `distinct()` of a
+computed column, a pivot of 'tidyr', or a step that is not a known verb,
+`whence_rows()` gives `NULL` with a warning that names the step. The
+waterfall still works.
+
+A plain `distinct(cyl)` keeps the link: each row that it keeps stands for
+all the cars with that number of cylinders.
 
 ```{r, eval = has_dplyr}
 trace <- whence_trace(
   mtcars |>
     filter(hp > 100) |>
-    distinct(cyl) |>
+    distinct(heavy = wt > 3) |>
     count()
 )
 rows <- whence_rows(trace)

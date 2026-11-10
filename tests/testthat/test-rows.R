@@ -112,14 +112,14 @@ test_that("an across() that would change the ids loses attribution, not accuracy
   expect_null(rows)
 })
 
-test_that("distinct gives NULL with the verb named, and the waterfall is complete", {
+test_that("distinct() of a computed column gives NULL with the verb named", {
   local_dplyr()
   sales <- make_sales()
 
   tr <- whence_trace(
     sales |>
       filter(region == "APAC") |>
-      distinct(customer) |>
+      distinct(name = toupper(customer)) |>
       summarise(n = n())
   )
 
@@ -289,18 +289,18 @@ test_that("step must be the number of a step", {
   expect_error(whence_rows(whence_trace(sum(1:3)), step = 1), "this pipeline has no steps")
 })
 
-test_that("a step before distinct() can still show its removed rows", {
+test_that("a step before an unfollowed distinct() can still show its removed rows", {
   local_dplyr()
   sales <- make_sales()
   tr <- whence_trace(
     sales |>
       filter(region == "APAC") |>
-      distinct(customer) |>
+      distinct(name = toupper(customer)) |>
       summarise(n = n())
   )
 
   expect_identical(nrow(whence_rows(tr, step = 1)), 10L)
-  expect_warning(rows <- whence_rows(tr, step = 2), "past distinct()", fixed = TRUE)
+  expect_warning(rows <- whence_rows(tr, step = 2), "distinct() removes no source row", fixed = TRUE)
   expect_null(rows)
 })
 
@@ -319,4 +319,49 @@ test_that("after a summary, a step that drops groups removes their source rows",
 
   expect_identical(unique(removed$region), "APAC")
   expect_identical(nrow(removed), 10L)
+})
+
+test_that("distinct() is followed: each kept row stands for its group", {
+  local_dplyr()
+  sales <- make_sales()
+  tr <- whence_trace(sales |> filter(region == "APAC") |> distinct(customer) |> count())
+
+  expect_identical(whence_value(tr), 4L)
+  expect_identical(whence_rows(tr), sales[sales$region == "APAC", ])
+  expect_identical(explain_payload(tr)$rowsAvailable, TRUE)
+  expect_identical(removable_steps(tr), 1L)
+  expect_warning(
+    rows <- whence_rows(tr, step = 2),
+    "distinct() removes no source row",
+    fixed = TRUE,
+    class = "whence_rows_unavailable"
+  )
+  expect_null(rows)
+})
+
+test_that("distinct() with no columns, with .keep_all, and after group_by()", {
+  local_dplyr()
+  d <- data.frame(a = c(1, 1, 2, 3), b = c("x", "x", "y", "z"))
+  expect_identical(whence_rows(whence_trace(d |> distinct() |> filter(a > 1) |> count())), d[3:4, ])
+  expect_identical(whence_rows(whence_trace(d |> distinct() |> filter(a == 1) |> count())), d[1:2, ])
+
+  sales <- make_sales()
+  kept <- whence_trace(sales |> distinct(customer, .keep_all = TRUE) |> filter(customer == "Acme") |> count())
+  expect_identical(whence_rows(kept), sales[sales$customer == "Acme", ])
+
+  grouped <- whence_trace(
+    sales |> group_by(region) |> distinct(customer) |> filter(region == "EMEA") |> ungroup() |> count()
+  )
+  expect_identical(whence_value(grouped), 4L)
+  expect_identical(whence_rows(grouped), sales[sales$region == "EMEA", ])
+})
+
+test_that("a group of a table after distinct() has its rows and counts", {
+  local_dplyr()
+  sales <- make_sales()
+  g <- whence_group(whence_table(sales |> distinct(region, customer) |> count(region)), region = "APAC")
+
+  expect_identical(as.data.frame(g)$n, c(10L, 4L, 1L))
+  expect_identical(whence_rows(g), sales[sales$region == "APAC", ])
+  expect_null(g$reason)
 })

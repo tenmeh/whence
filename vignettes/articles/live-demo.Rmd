@@ -15,8 +15,8 @@ Things to try:
 * Press **View the rows** in the panel to see the rows that make the value.
 * Change the region or the year, and click the number again. The code
   holds the new values.
-* Open **Customers**. It uses `distinct()`, so the panel says that the rows
-  cannot be found. The waterfall still works.
+* Open **Customers**. It uses `distinct()`, which keeps one row for each
+  customer. **View the rows** still gives every row behind the count.
 
 ```{=html}
 <div class="whence-live-demo">

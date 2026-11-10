@@ -61,8 +61,8 @@ whence_table <- function(expr, env = parent.frame(), lazy = getOption("whence.la
 #'
 #' The counts come from a replay of the steps with a hidden id column. After
 #' a step that breaks the link between a row and the source, such as
-#' `distinct()`, the counts of the group are not known, and the trace says
-#' so. The reproduce code is the code of the table with a last `filter()`
+#' `pivot_longer()`, the counts of the group are not known, and the trace
+#' says so. The reproduce code is the code of the table with a last `filter()`
 #' that keeps this row, so it gives the row as the table has it.
 #'
 #' @param table A `whence_table` from [whence_table()].

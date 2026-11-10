@@ -93,7 +93,8 @@ server <- function(input, output, session) {
       pull(share)
   )
 
-  # distinct() ends row attribution. The waterfall still works.
+  # distinct() keeps one row for each customer. Each stands for all the rows
+  # of that customer, so the rows behind the count can still be found.
   output$customers <- renderWhence(
     sales |>
       filter(region == input$region, year >= input$from) |>
