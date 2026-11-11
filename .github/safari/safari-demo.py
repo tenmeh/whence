@@ -1,5 +1,5 @@
 # Open a shinylive app in real Safari with safaridriver, and report whether
-# its outputs fill in. Usage: python3 safari-demo.py <url> [seconds]
+# its outputs fill in. Usage: python3 safari-demo.py <url> [seconds] [name]
 #
 # The console of the page is captured by wrapping console.* right after the
 # page loads. webR takes seconds to start, so its messages come later.
@@ -11,6 +11,7 @@ from selenium import webdriver
 
 url = sys.argv[1]
 seconds = int(sys.argv[2]) if len(sys.argv) > 2 else 240
+name = sys.argv[3] if len(sys.argv) > 3 else "demo"
 
 CAPTURE = """
 window.__logs = [];
@@ -61,7 +62,7 @@ while time.time() - start < seconds:
     if filled or crashed:
         break
 
-driver.save_screenshot("safari-demo.png")
+driver.save_screenshot("safari-" + name + ".png")
 print(json.dumps({
     "url": url,
     "seconds": round(time.time() - start),
