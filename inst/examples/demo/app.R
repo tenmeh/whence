@@ -92,6 +92,20 @@ server <- function(input, output, session) {
       print = FALSE
     ))
     session$onFlushed(function() message("whence demo: all outputs sent"))
+    # Test branch only: name every whence function as it starts.
+    ns <- asNamespace("whence")
+    for (fn in setdiff(ls(ns), "trace_expr")) {
+      if (is.function(get(fn, envir = ns))) {
+        suppressMessages(try(trace(
+          fn,
+          tracer = bquote(message("whence fn: ", .(fn))),
+          where = ns,
+          print = FALSE
+        ), silent = TRUE))
+      }
+    }
+    # And the transform of each output, after the trace.
+    shiny::onFlush(function() message("whence demo: flush"), once = FALSE)
   }
 
   output$revenue <- renderWhence(

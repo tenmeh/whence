@@ -22,6 +22,7 @@ window.__logs = [];
   console[kind] = function () {
     try {
       window.__logs.push(kind + ': ' + Array.prototype.join.call(arguments, ' ').slice(0, 300));
+      if (window.__logs.length > 4000) { window.__logs.shift(); }
     } catch (e) {}
     original.apply(console, arguments);
   };
