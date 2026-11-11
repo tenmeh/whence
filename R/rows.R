@@ -23,8 +23,44 @@ carry_verbs <- c(
 
 # The verbs that the identity pass can follow.
 tracked_verbs <- c(
-  carry_verbs, "select", "transmute", "summarise", "count", "tally", "pull"
+  carry_verbs, "select", "transmute", "summarise", "count", "tally", "pull",
+  "distinct"
 )
+
+
+#' Can the identity pass follow this distinct() call?
+#'
+#' Each row of the result stands for the input rows with the same values in
+#' its columns. That needs the columns to exist in the input, so each
+#' argument must be a bare column name, or `.keep_all`. A computed column,
+#' such as `distinct(r = tolower(region))`, cannot be matched.
+#' @noRd
+distinct_followable <- function(call) {
+  args <- as.list(call)[-(1:2)]
+  if (length(args) == 0) {
+    return(TRUE)
+  }
+  arg_names <- names(args) %||% rep("", length(args))
+  ok <- arg_names == ".keep_all" | (!nzchar(arg_names) & vapply(args, is.symbol, logical(1)))
+  all(ok)
+}
+
+
+#' Can the identity pass follow stage `i` of `stages`?
+#' @noRd
+stage_followable <- function(stages, i) {
+  verb <- stage_verb(stages[[i]])
+  if (is.na(verb) || !verb %in% tracked_verbs) {
+    return(FALSE)
+  }
+  if (verb == "pull" && i != length(stages)) {
+    return(FALSE)
+  }
+  if (verb == "distinct" && !distinct_followable(stages[[i]]$call)) {
+    return(FALSE)
+  }
+  TRUE
+}
 
 
 #' The rows that make the value, or the rows that a step removed
@@ -53,12 +89,16 @@ tracked_verbs <- c(
 #' the source. [whence_trace()] never does this, so the waterfall costs
 #' nothing extra. The data that you give is never changed.
 #'
-#' Some steps destroy the link between a row and the source:
-#' `distinct()`, `pivot_longer()`, `pivot_wider()`, and each step that is
-#' not a known verb. After such a step the function gives `NULL` with a
-#' warning that names the step. The rows that an earlier step removed can
-#' still be found. The waterfall of the trace is always complete, because it
-#' uses counts only.
+#' After `distinct()`, each row that it keeps stands for all the rows that
+#' are the same in its columns, as a group of `count()` does. A `distinct()`
+#' step thus removes no source row, and `step` for it gives `NULL`.
+#'
+#' Some steps destroy the link between a row and the source: `distinct()` of
+#' a computed column, such as `distinct(r = tolower(region))`,
+#' `pivot_longer()`, `pivot_wider()`, and each step that is not a known verb.
+#' After such a step the function gives `NULL` with a warning that names the
+#' step. The rows that an earlier step removed can still be found. The
+#' waterfall of the trace is always complete, because it uses counts only.
 #'
 #' @param trace A `whence_trace` from [whence_trace()] or [whence_table()],
 #'   or a group from [whence_group()].
@@ -142,6 +182,12 @@ rows_query <- function(x, step = NULL) {
   }
   if (!is.null(step) && step <= origin$step) {
     return(lost_identity(NA_character_, origin$prefix_reason))
+  }
+  if (!is.null(step) && identical(trace$stages$kind[[step + 1L]], "distinct")) {
+    return(lost_identity("distinct", paste0(
+      "distinct() removes no source row: each row that it drops is in a ",
+      "group of the same rows that it keeps"
+    )))
   }
   replay <- x$replay %||% replay_trace(trace)
   sources <- replay$sources
@@ -260,7 +306,7 @@ replay_trace <- function(trace) {
     }
     stage <- stages[[i]]
     verb <- stage_verb(stage)
-    if (is.na(verb) || !verb %in% tracked_verbs) {
+    if (!stage_followable(stages, i)) {
       return(stop_with(lost_identity(verb)))
     }
     if (verb == "pull" && i != length(stages)) {
@@ -361,6 +407,9 @@ replay_stage <- function(stage, verb, data, env, id_map) {
   if (verb %in% c("summarise", "count", "tally")) {
     return(replay_aggregate(stage, verb, data, env, id_map))
   }
+  if (verb == "distinct") {
+    return(replay_distinct(stage, data, env, id_map))
+  }
 
   stage$call <- keep_id_call(stage$call, verb)
   out <- if (verb %in% join_verbs) {
@@ -436,6 +485,37 @@ ids_by_key <- function(data, out) {
     # A group that was computed in the call is not in the input.
     stop("A grouping column is not in the input.", call. = FALSE)
   }
+  ids_by_columns(data, out, keys)
+}
+
+
+#' Replay distinct(), and record which ids make each output row
+#'
+#' The id column would make every row distinct, so the step runs on the data
+#' without it. Each output row then stands for every input row with the same
+#' values in the columns that decide, as a group of count() does. With
+#' `.keep_all = TRUE` the result has every column, so those columns are found
+#' by running the call once more without it.
+#' @noRd
+replay_distinct <- function(stage, data, env, id_map) {
+  plain <- data
+  plain[[id_col]] <- NULL
+  out <- eval_stage(stage, plain, env)
+  keys <- names(out)
+  if (".keep_all" %in% names(stage$call)) {
+    stage$call$.keep_all <- NULL
+    keys <- names(eval_stage(stage, plain, env))
+  }
+  groups <- ids_by_columns(data, out, keys)
+  new_map <- lapply(groups, resolve_ids, id_map = id_map)
+  out[[id_col]] <- paste0("w", seq_len(nrow(out)), recycle0 = TRUE)
+  list(data = out, id_map = new_map, ids = NULL)
+}
+
+
+#' The ids of the input rows that make each row of `out`, by `keys`
+#' @noRd
+ids_by_columns <- function(data, out, keys) {
   ids <- data[[id_col]]
   if (length(keys) == 0) {
     return(list(ids))
@@ -504,7 +584,7 @@ rows_unavailable_reason <- function(trace) {
       next
     }
     verb <- verbs[[i]]
-    if (is.na(verb) || !verb %in% tracked_verbs || (verb == "pull" && i != length(verbs))) {
+    if (!stage_followable(trace$stage_list, i)) {
       return(lost_identity(verb)$reason)
     }
   }

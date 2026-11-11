@@ -102,11 +102,11 @@ test_that("NA and the string 'NA' are different groups", {
   expect_match(whence_code(whence_group(tab, na_row)), "filter(is.na(g))", fixed = TRUE)
 })
 
-test_that("past distinct() the counts of a group are not known, and say so", {
+test_that("past a computed distinct() the counts of a group are not known, and say so", {
   local_dplyr()
   sales <- make_sales()
 
-  g <- whence_group(whence_table(sales |> distinct(region, customer) |> count(region)), 1)
+  g <- whence_group(whence_table(sales |> distinct(region, name = toupper(customer)) |> count(region)), 1)
 
   expect_identical(as.data.frame(g)$n[2:3], c(NA_integer_, NA_integer_))
   expect_match(g$reason, "Counts for this group are not known past distinct()", fixed = TRUE)

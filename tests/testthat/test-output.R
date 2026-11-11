@@ -62,7 +62,7 @@ test_that("the payload holds the shown stages, the code and the rows flag", {
 test_that("the payload names the step past which rows are unavailable", {
   local_dplyr()
   sales <- make_sales()
-  tr <- whence_trace(sales |> distinct(region) |> summarise(n = n()))
+  tr <- whence_trace(sales |> distinct(r = tolower(region)) |> summarise(n = n()))
 
   payload <- explain_payload(tr)
 
