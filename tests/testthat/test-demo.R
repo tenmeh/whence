@@ -5,6 +5,10 @@ test_that("the demo app opens each panel and shows the rows, with no errors", {
   skip_if(app_dir == "", "The demo is not installed.")
   app <- local_app_driver(app_dir, name = "demo")
 
+  # The note about the slow start goes away with the first value.
+  app$wait_for_js("document.getElementById('demo-starting') === null", timeout = 20000)
+  expect_identical(app$get_js("document.querySelector('#revenue .whence-value') !== null"), TRUE)
+
   for (id in c("revenue", "orders", "top_share", "customers")) {
     app$wait_for_js(
       sprintf("document.querySelector('#%s .whence-value') !== null", id),

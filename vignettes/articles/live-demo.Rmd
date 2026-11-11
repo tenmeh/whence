@@ -6,7 +6,9 @@ output: rmarkdown::html_document
 This is the demo app of `whence`, running in your browser. There is no
 server: [shinylive](https://posit-dev.github.io/r-shinylive/) runs R and
 Shiny in the page with webR. The first start downloads R and the packages,
-so it can take some seconds.
+so it can take up to a minute. Until then the values stay grey. If it does
+not start, <a href="../demo/" target="_blank" rel="noopener">open the demo in
+a new tab</a>.
 
 Things to try:
 
