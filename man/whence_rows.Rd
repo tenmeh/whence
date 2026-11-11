@@ -46,12 +46,16 @@ The function replays the pipeline with a hidden id column on a copy of
 the source. \code{\link[=whence_trace]{whence_trace()}} never does this, so the waterfall costs
 nothing extra. The data that you give is never changed.
 
-Some steps destroy the link between a row and the source:
-\code{distinct()}, \code{pivot_longer()}, \code{pivot_wider()}, and each step that is
-not a known verb. After such a step the function gives \code{NULL} with a
-warning that names the step. The rows that an earlier step removed can
-still be found. The waterfall of the trace is always complete, because it
-uses counts only.
+After \code{distinct()}, each row that it keeps stands for all the rows that
+are the same in its columns, as a group of \code{count()} does. A \code{distinct()}
+step thus removes no source row, and \code{step} for it gives \code{NULL}.
+
+Some steps destroy the link between a row and the source: \code{distinct()} of
+a computed column, such as \code{distinct(r = tolower(region))},
+\code{pivot_longer()}, \code{pivot_wider()}, and each step that is not a known verb.
+After such a step the function gives \code{NULL} with a warning that names the
+step. The rows that an earlier step removed can still be found. The
+waterfall of the trace is always complete, because it uses counts only.
 }
 \examples{
 \dontshow{if (requireNamespace("dplyr", quietly = TRUE)) withAutoprint(\{ # examplesIf}

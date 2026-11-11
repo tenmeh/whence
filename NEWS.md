@@ -6,6 +6,10 @@
 
 * `whencePlotOutput()`: opening "Show the data" scrolls its table into view.
   It opens below the plot, often below the fold (#15).
+* `whence_rows()` and the panel follow `distinct()`. Each row that it keeps
+  stands for all the rows that are the same in its columns, so the rows
+  behind a value can still be found. A `distinct()` of a computed column
+  still breaks the link.
 
 * `whence_trace()`, `whence_table()` and the render functions accept
   `lazy = "count"` to count each step of a lazy pipeline. Each lazy step

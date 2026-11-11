@@ -204,8 +204,9 @@ code of a row is the code of the table with a last `filter()` on the group.
 
 The rows that make the value are found only when the viewer asks for them.
 The steps then run again on a copy of the source with a hidden id column.
-After `distinct()`, `pivot_longer()`, `pivot_wider()` or a step that is not
-a known verb, the link to the source rows is lost. The panel then says so,
+After a `distinct()` of a computed column, `pivot_longer()`,
+`pivot_wider()` or a step that is not a known verb, the link to the source
+rows is lost. The panel then says so,
 and the waterfall still works.
 
 In the reproduce code, only `input$name` and `input[["name"]]` are replaced

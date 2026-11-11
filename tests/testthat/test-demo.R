@@ -16,10 +16,8 @@ test_that("the demo app opens each panel and shows the rows, with no errors", {
     )
     app$click(selector = sprintf("#%s .whence-value", id))
     app$wait_for_js("document.querySelector('.whence-panel') !== null")
-    if (id != "customers") {
-      app$click(selector = ".whence-rows-button")
-      app$wait_for_js("document.querySelector('.whence-rows h3') !== null", timeout = 20000)
-    }
+    app$click(selector = ".whence-rows-button")
+    app$wait_for_js("document.querySelector('.whence-rows h3') !== null", timeout = 20000)
     app$click(selector = ".whence-close")
     app$wait_for_js("document.querySelector('.whence-panel') === null")
   }

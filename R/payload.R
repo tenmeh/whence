@@ -89,11 +89,14 @@ removable_steps <- function(x) {
     return(integer(0))
   }
   verbs <- vapply(trace$stage_list, stage_verb, character(1))
-  followed <- !is.na(verbs) & verbs %in% tracked_verbs
+  followed <- vapply(seq_along(verbs), stage_followable, logical(1), stages = trace$stage_list)
   followed[seq_along(verbs) <= origin$step] <- TRUE
   last_ok <- if (all(followed)) length(verbs) else which(!followed)[1] - 1L
   stages <- x$stages
-  stages$step[!is.na(stages$delta) & stages$delta < 0 & stages$step > origin$step & stages$step <= last_ok]
+  # distinct() keeps a row for each group of the same rows, so each source
+  # row still counts: it removes none, and has nothing to show.
+  removes <- !is.na(stages$delta) & stages$delta < 0 & stages$kind != "distinct"
+  stages$step[removes & stages$step > origin$step & stages$step <= last_ok]
 }
 
 

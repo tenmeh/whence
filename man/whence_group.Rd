@@ -30,8 +30,8 @@ removed.
 \details{
 The counts come from a replay of the steps with a hidden id column. After
 a step that breaks the link between a row and the source, such as
-\code{distinct()}, the counts of the group are not known, and the trace says
-so. The reproduce code is the code of the table with a last \code{filter()}
+\code{pivot_longer()}, the counts of the group are not known, and the trace
+says so. The reproduce code is the code of the table with a last \code{filter()}
 that keeps this row, so it gives the row as the table has it.
 }
 \examples{
