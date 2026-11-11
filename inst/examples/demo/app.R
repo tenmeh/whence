@@ -18,7 +18,7 @@ has_ggplot <- requireNamespace("ggplot2", quietly = TRUE)
 # --- Data ---------------------------------------------------------------------
 # Made up, and the same at each start.
 set.seed(2026)
-n_rows <- 18442
+n_rows <- 2000
 sales <- data.frame(
   customer = sample(
     c("Acme Corp", "Bolt Ltd", "Cove & Co", "Dune Retail", "Elm Partners"),
@@ -79,6 +79,21 @@ ui <- fluidPage(
 
 # --- Server -------------------------------------------------------------------
 server <- function(input, output, session) {
+  # In the live demo, R runs in the browser with webR. Safari gives it a
+  # small stack, and one report (#15) ran out of it. There, name each output
+  # in the browser console as it starts, so the last name shows which one
+  # hit the limit. Shinylive labels these lines "preload error", but they
+  # are only this trace.
+  if (grepl("emscripten", R.version$platform, fixed = TRUE)) {
+    suppressMessages(trace(
+      "trace_expr",
+      tracer = quote(message("whence demo: rendering ", shiny::getCurrentOutputInfo()$name)),
+      where = asNamespace("whence"),
+      print = FALSE
+    ))
+    session$onFlushed(function() message("whence demo: all outputs sent"))
+  }
+
   output$revenue <- renderWhence(
     sales |>
       filter(region == input$region) |>
