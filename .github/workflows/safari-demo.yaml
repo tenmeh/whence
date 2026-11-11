@@ -1,0 +1,63 @@
+# A throwaway test of the live demo in real Safari (#15). This file lives
+# only on the branch test/safari-demo, which is never merged.
+on:
+  push:
+    branches: [test/safari-demo]
+
+name: safari-demo
+
+permissions: read-all
+
+env:
+  DEMO_URL: https://tenmeh.github.io/whence/demo/
+
+jobs:
+  safari:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versions
+        run: |
+          sw_vers
+          defaults read /Applications/Safari.app/Contents/Info CFBundleShortVersionString
+
+      - name: Enable safaridriver
+        run: sudo safaridriver --enable
+
+      - name: Install selenium
+        run: python3 -m pip install --break-system-packages selenium
+
+      - name: Open the demo in Safari
+        run: python3 .github/safari/safari-demo.py "$DEMO_URL" 240
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safari-macos
+          path: safari-demo.png
+
+  ios-simulator:
+    runs-on: macos-latest
+    steps:
+      - name: Boot an iPhone simulator
+        run: |
+          udid=$(xcrun simctl list devices available | grep -m1 -E "iPhone [0-9]+ \(" | grep -oE "[0-9A-F-]{36}")
+          echo "UDID=$udid" >> "$GITHUB_ENV"
+          xcrun simctl list devices available | grep "$udid"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Open the demo in iOS Safari
+        run: |
+          xcrun simctl openurl "$UDID" "$DEMO_URL"
+          for s in 60 120 180; do
+            sleep 60
+            xcrun simctl io "$UDID" screenshot "ios-${s}s.png"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safari-ios-simulator
+          path: ios-*.png
