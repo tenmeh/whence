@@ -1,8 +1,10 @@
 # Open a shinylive app in real Safari with safaridriver, and report whether
 # its outputs fill in. Usage: python3 safari-demo.py <url> [seconds] [name]
 #
-# The console of the page is captured by wrapping console.* right after the
-# page loads. webR takes seconds to start, so its messages come later.
+# The console of the page is captured by wrapping console.* after the page
+# loads. Shinylive can reload the page once to register its service worker,
+# so the wrapper is put back whenever it is gone. webR takes seconds to
+# start, so its messages come later.
 import json
 import sys
 import time
@@ -51,8 +53,10 @@ start = time.time()
 state = None
 logs = []
 while time.time() - start < seconds:
-    time.sleep(5)
+    time.sleep(2)
     try:
+        if not driver.execute_script("return !!window.__logs;"):
+            driver.execute_script(CAPTURE)
         state = driver.execute_script(STATE)
         logs = driver.execute_script("return window.__logs || [];")
     except Exception as e:  # The page can be busy while webR starts.
