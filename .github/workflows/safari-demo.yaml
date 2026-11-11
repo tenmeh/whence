@@ -41,7 +41,9 @@ jobs:
         run: |
           mkdir site
           Rscript pkgdown/live-demo.R site
-          Rscript -e 'shinylive::export(".github/safari/baseline", "site/baseline", quiet = TRUE)'
+          for app in baseline plot-base plot-ggplot; do
+            Rscript -e "shinylive::export('.github/safari/$app', 'site/$app', quiet = TRUE)"
+          done
 
       - name: Enable safaridriver
         run: sudo safaridriver --enable
@@ -54,6 +56,12 @@ jobs:
           python3 -m http.server 8000 --directory site > /dev/null 2>&1 &
           sleep 2
           python3 .github/safari/safari-demo.py http://localhost:8000/baseline/ 240 baseline
+
+      - name: Open the base plot in Safari
+        run: python3 .github/safari/safari-demo.py http://localhost:8000/plot-base/ 240 plot-base
+
+      - name: Open the ggplot2 plot in Safari
+        run: python3 .github/safari/safari-demo.py http://localhost:8000/plot-ggplot/ 240 plot-ggplot
 
       - name: Open the demo in Safari
         run: python3 .github/safari/safari-demo.py http://localhost:8000/demo/ 240 demo
