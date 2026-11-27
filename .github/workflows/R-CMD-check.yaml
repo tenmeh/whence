@@ -37,11 +37,9 @@ jobs:
           # 'arrow' and 'duckplyr' (through duckdb) need R >= 4.2. They are
           # only in Suggests, and their tests skip when they are not
           # installed, so this job checks without them. 'ggplot2' 4.0 needs
-          # 'S7', which needs R >= 4.2, so this job uses 'ggplot2' 3.5.2, the
-          # last release before 4.0. The plot tests then still run on R 4.1.
-          # A package named here gets its Suggests too, and 'Hmisc' (in the
-          # Suggests of 'ggplot2') needs R >= 4.2. whence does not use it.
-          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore, Hmisc=?ignore, ggplot2@3.5.2'}
+          # 'S7', which needs R >= 4.2. This job leaves 'ggplot2' out here and
+          # installs 3.5.2 in a later step, so the plot tests still run.
+          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore, ggplot2=?ignore'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -85,6 +83,14 @@ jobs:
             any::rcmdcheck
             ${{ matrix.config.ignore }}
           needs: check
+
+      # 'ggplot2' 3.5.2, the last release before 4.0, with its hard
+      # dependencies only. A package named in extra-packages also gets its
+      # Suggests, and several of those need a newer R (Hmisc, Matrix).
+      - name: Install ggplot2 3.5.2 on R 4.1
+        if: matrix.config.r == '4.1'
+        run: pak::pkg_install("ggplot2@3.5.2", dependencies = NA)
+        shell: Rscript {0}
 
       - uses: r-lib/actions/check-r-package@v2
         with:
