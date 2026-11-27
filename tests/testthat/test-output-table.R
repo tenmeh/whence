@@ -145,6 +145,34 @@ test_that("a point request with a click off the bars says so", {
   expect_identical(sent[[2]]$message$panel$value, "region = APAC")
 })
 
+test_that("a hover request answers with the row under the pointer, never evaluating its text", {
+  local_dplyr()
+  trace <- region_table()
+  trace$plot_values <- list(x = trace$value$region, y = trace$value$total)
+  traces <- list2env(list(by_channel = trace))
+  session <- fake_table_session()
+  click <- list(
+    x = 2, y = 100, mapping = list(x = "region", y = "total"),
+    domain = list(discrete_limits = list(x = list("APAC", "EMEA")))
+  )
+  request <- list(id = "by_channel", action = "hover", click = click)
+
+  handle_request(session, traces, request)
+  request$click$mapping$x <- "stop('evaluated')"
+  expect_no_error(handle_request(session, traces, request))
+  request$click$x <- 5
+  handle_request(session, traces, request)
+
+  sent <- session$sent()
+  expect_identical(lapply(sent, function(reply) reply$type), rep(list("whence:hover"), 3))
+  expect_identical(lapply(sent, function(reply) reply$message), list(
+    list(id = "by_channel", row = 2L),
+    list(id = "by_channel", row = 2L),
+    list(id = "by_channel", row = NULL)
+  ))
+  expect_length(ls(session$userData$.whence_groups), 0)
+})
+
 test_that("a new render forgets the panels of the rows of the old table", {
   local_dplyr()
   sales <- make_sales()

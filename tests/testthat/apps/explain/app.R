@@ -26,7 +26,7 @@ ui <- fluidPage(
   tags$p(whenceOutput("joined_one", label = "One repeated match")),
   uiOutput("dynamic"),
   whenceTableOutput("by_region", label = "Revenue by region"),
-  whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px"),
+  whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px", hover = "waterfall"),
   actionButton("drop", "Remove the joined output"),
   actionButton("rebuild", "Rebuild the dynamic output"),
   tags$button(id = "after", type = "button", "A control after the outputs"),
@@ -98,7 +98,7 @@ server <- function(input, output, session) {
   output$by_region_panel <- renderWhenceTable(by_region, quoted = TRUE)
   output$plot_region <- renderWhencePlot(
     sales |>
-      filter(year >= input$plot_from) |>
+      filter(year >= input$plot_from, region == "APAC" | year <= 2024) |>
       group_by(region) |>
       summarise(total = sum(revenue)),
     # A computed aesthetic, as for bars sorted by their height.

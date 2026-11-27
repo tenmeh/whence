@@ -4,6 +4,15 @@
   In the live demo, R starts in the browser and the values stay grey for up
   to a minute (#15).
 
+* `whenceOutput()`, `whencePlotOutput()` and `whenceTableOutput()` accept
+  `marker` to choose the cue on values and table rows. Set
+  `options(whence.marker = "dashed")` to change the default.
+
+* `whenceOutput()`, `whencePlotOutput()` and `whenceTableOutput()` accept
+  `hover` to choose a preview for values, table rows and plot bars. The
+  default preview shows the biggest cut. Set `options(whence.hover = "none")`
+  to turn previews off by default.
+
 * `whencePlotOutput()`: opening "Show the data" scrolls its table into view.
   It opens below the plot, often below the fold (#15).
 

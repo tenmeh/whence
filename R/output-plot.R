@@ -61,7 +61,10 @@ whencePlotOutput <- function(outputId, label = NULL, width = "100%", height = "4
         outputId,
         width = width,
         height = height,
-        click = shiny::clickOpts(id = paste0(outputId, plot_click_suffix))
+        click = shiny::clickOpts(id = paste0(outputId, plot_click_suffix)),
+        hover = if (hover != "none") {
+          shiny::hoverOpts(id = paste0(outputId, plot_hover_suffix), delay = 300, delayType = "debounce")
+        }
       ),
       htmltools::tags$details(
         class = "whence-plot-data",
@@ -103,8 +106,8 @@ renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height =
   draw_env$.whence_draw <- function() {
     trace <- trace_expr(expr, env, mode = "table", lazy = lazy)
     drawn <- plot(trace$value)
-    # The x and y of each row, from the plot itself. A click is matched to
-    # these, so the text of the click data is never evaluated.
+    # Match clicks and hovers to the x and y of each row from the plot.
+    # This keeps the browser's mapping text out of evaluation.
     trace$plot_values <- plot_values(drawn, trace$value)
     session <- shiny::getDefaultReactiveDomain()
     name <- if (!is.null(session)) shiny::getCurrentOutputInfo(session)$name
@@ -134,9 +137,9 @@ renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height =
 }
 
 
-# The suffix of the click input of a whence plot. The browser sends each
-# click to the server as a "point" request instead.
+# The browser forwards Shiny's inputs as point and hover requests.
 plot_click_suffix <- "_whence_click"
+plot_hover_suffix <- "_whence_hover"
 
 
 #' The row of a summary table under a click on its plot, or NA

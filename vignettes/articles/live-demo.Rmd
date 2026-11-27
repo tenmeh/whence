@@ -12,6 +12,7 @@ a new tab</a>.
 
 Things to try:
 
+* Rest the pointer on a number to see how many rows make it and which step removed the most.
 * Click a number. The panel shows where its rows went, and the code that
   makes it again.
 * Press **View the rows** in the panel to see the rows that make the value.

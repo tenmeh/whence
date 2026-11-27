@@ -23,8 +23,9 @@
   // The input that tells the app which panel is open. See opened.R.
   var OPENED = ".whence_opened";
 
-  // The suffix of the click input of a whence plot. See output-plot.R.
+  // The suffixes of the Shiny inputs of a whence plot. See output-plot.R.
   var CLICK_SUFFIX = "_whence_click";
+  var HOVER_SUFFIX = "_whence_hover";
 
   // How long an unbound output waits before it tells the server that it is
   // gone. renderUI() unbinds an output and binds a new one with the same id
@@ -333,7 +334,7 @@
         var cut = summary.cut;
         if (cut) {
           node.appendChild(make("p", null, "Biggest cut: " + cut.label));
-          node.appendChild(make("p", null, "-" + cut.removed.toLocaleString("en-GB") + " rows" +
+          node.appendChild(make("p", null, MINUS + cut.removed.toLocaleString("en-GB") + " rows" +
             (cut.percent ? " (" + cut.percent + ")" : "")));
         } else {
           node.appendChild(make("p", null, "No step removed rows."));
@@ -346,10 +347,15 @@
     return node;
   }
 
+  function startPreview(id, trigger) {
+    closePreview();
+    preview = { id: id, trigger: trigger, node: null, openTimer: null, closeTimer: null };
+    return preview;
+  }
+
   function openPreview(id, trigger, content) {
     if (!preview || preview.id !== id || preview.trigger !== trigger || preview.node) {
-      closePreview();
-      preview = { id: id, trigger: trigger, node: null, openTimer: null, closeTimer: null };
+      startPreview(id, trigger);
     }
     var active = preview;
     active.node = content;
@@ -381,7 +387,7 @@
       }
     });
     document.body.appendChild(content);
-    place(content, trigger);
+    place(content, trigger, active.anchor);
   }
 
   function closePreview(id) {
@@ -390,6 +396,10 @@
     }
     var active = preview;
     preview = null;
+    var state = outputs[active.id];
+    if (state && state.hoverTarget && state.hoverTarget.active === active) {
+      state.hoverTarget = null;
+    }
     window.clearTimeout(active.openTimer);
     window.clearTimeout(active.closeTimer);
     if (active.node) {
@@ -418,13 +428,34 @@
     }, 200);
   }
 
+  function previewStyle(trigger) {
+    var holder = trigger.closest("[data-whence-hover]");
+    var style = holder && holder.getAttribute("data-whence-hover");
+    if (!style || style === "none" || !previewViewport.matches ||
+        Object.keys(outputs).some(function (key) { return outputs[key].panel; })) {
+      return null;
+    }
+    return style;
+  }
+
+  function showPreview(active, data, style) {
+    if (style === "panel") {
+      showPanelPreview(active, data);
+    } else {
+      var stages = data.stages || [];
+      var summary = summarise(stages);
+      summary.reason = data.reason;
+      summary.untraced = data.untraced;
+      summary.subject = data.subject || "value";
+      openPreview(active.id, active.trigger, previewContent(style, summary, stages));
+    }
+  }
+
   function bindPreview(id, trigger, getStages) {
     var pointerFocus = false;
     function start(focus) {
-      var holder = trigger.closest("[data-whence-hover]");
-      var style = holder && holder.getAttribute("data-whence-hover");
-      if (!style || style === "none" || !previewViewport.matches ||
-          Object.keys(outputs).some(function (key) { return outputs[key].panel; })) {
+      var style = previewStyle(trigger);
+      if (!style) {
         return;
       }
       if (preview && preview.trigger === trigger) {
@@ -433,24 +464,12 @@
           return;
         }
       }
-      closePreview();
-      var active = { id: id, trigger: trigger, node: null, openTimer: null, closeTimer: null };
-      preview = active;
+      var active = startPreview(id, trigger);
       var show = function () {
         if (preview !== active || !trigger.isConnected || !previewViewport.matches) {
           return;
         }
-        var data = getStages();
-        var stages = data.stages || [];
-        if (style === "panel") {
-          showPanelPreview(active, data);
-        } else {
-          var summary = summarise(stages);
-          summary.reason = data.reason;
-          summary.untraced = data.untraced;
-          summary.subject = data.subject || "value";
-          openPreview(id, trigger, previewContent(style, summary, stages));
-        }
+        showPreview(active, getStages(), style);
       };
       if (focus) {
         show();
@@ -533,7 +552,11 @@
     var index = Array.prototype.indexOf.call(active.node.querySelectorAll("button"), button);
     event.preventDefault();
     event.stopImmediatePropagation();
-    active.trigger.click();
+    if (active.anchor) {
+      openGroup(active.id, active.row, active.trigger, active.anchor);
+    } else {
+      active.trigger.click();
+    }
     var panel = outputs[active.id].panel;
     if (panel && index !== -1) {
       var control = panel.querySelectorAll("button")[index];
@@ -603,36 +626,142 @@
 
   // --- A plot -----------------------------------------------------------
 
-  // A whence plot sends no click input of its own. Each click becomes a
-  // "point" request, and the server finds the row under it.
+  // Forward both positions through the same row lookup on the server.
   function onInputChanged(event) {
-    if (typeof event.name !== "string" || event.name.slice(-CLICK_SUFFIX.length) !== CLICK_SUFFIX || !event.value) {
+    if (typeof event.name !== "string") {
       return;
     }
-    var id = event.name.slice(0, -CLICK_SUFFIX.length);
+    var hovering = event.name.endsWith(HOVER_SUFFIX);
+    if (!hovering && (!event.name.endsWith(CLICK_SUFFIX) || !event.value)) {
+      return;
+    }
+    var suffix = hovering ? HOVER_SUFFIX : CLICK_SUFFIX;
+    var id = event.name.slice(0, -suffix.length);
     var plot = document.getElementById(id);
     if (!plot || !plot.closest(".whence-plot")) {
       return;
     }
     event.preventDefault();
-    var image = plot.querySelector("img") || plot;
-    var rect = image.getBoundingClientRect();
-    var css = event.value.coords_css || { x: 0, y: 0 };
-    var anchor = { left: rect.left + css.x, bottom: rect.top + css.y };
+    if (hovering) {
+      requestPlotHover(plot, event.value);
+      return;
+    }
+    var anchor = plotAnchor(plot, event.value);
     openPanel(id, { data: null, trigger: plot, anchor: anchor, row: null, group: true });
     request(id, "point", { click: event.value });
+  }
+
+  function plotAnchor(plot, position) {
+    var image = plot.querySelector("img") || plot;
+    var rect = image.getBoundingClientRect();
+    var css = position.coords_css || { x: 0, y: 0 };
+    return { left: rect.left + css.x, bottom: rect.top + css.y };
+  }
+
+  function requestPlotHover(plot, position) {
+    var state = outputs[plot.id];
+    if (!position) {
+      leavePlot(plot);
+      return;
+    }
+    if (!state || !state.data || state.touchPlot || !previewStyle(plot)) {
+      return;
+    }
+    var active = preview && preview.trigger === plot ? preview : startPreview(plot.id, plot);
+    window.clearTimeout(active.closeTimer);
+    state.hoverTarget = { active: active, position: position };
+    sendPlotHover(plot.id, state);
+  }
+
+  function sendPlotHover(id, state) {
+    // Replies carry only a row. Keep one request in flight so a late reply
+    // cannot be placed at a newer position or on a new render.
+    if (!state.hoverRequest && state.hoverTarget && state.hoverTarget.active === preview) {
+      state.hoverRequest = state.hoverTarget;
+      request(id, "hover", { click: state.hoverRequest.position });
+    }
+  }
+
+  function onHover(message) {
+    var id = message.id;
+    var state = outputs[id];
+    if (!state || !state.hoverRequest) {
+      return;
+    }
+    var matched = state.hoverRequest;
+    state.hoverRequest = null;
+    if (matched !== state.hoverTarget) {
+      sendPlotHover(id, state);
+      return;
+    }
+    if (preview !== matched.active) {
+      return;
+    }
+    var active = matched.active;
+    var trigger = active.trigger;
+    var style = previewStyle(trigger);
+    if (message.row == null || !style) {
+      closePreview(id);
+      return;
+    }
+    var anchor = plotAnchor(trigger, matched.position);
+    if (active.node && active.row === message.row) {
+      active.anchor = anchor;
+      place(active.node, trigger, anchor);
+      return;
+    }
+    if (active.node) {
+      active = startPreview(id, trigger);
+    }
+    active.anchor = anchor;
+    active.row = message.row;
+    showPreview(active, rowPreview(state.data, message.row), style);
+  }
+
+  function leavePlot(plot) {
+    var state = outputs[plot.id];
+    if (state) {
+      state.hoverTarget = null;
+    }
+    if (preview && preview.trigger === plot) {
+      leavePreview(preview);
+    }
+  }
+
+  function onPlotPointer(event) {
+    var plot = event.target.closest && event.target.closest(".whence-plot > [data-hover-id]");
+    if (!plot) {
+      return;
+    }
+    if (event.type === "pointerout") {
+      if (!plot.contains(event.relatedTarget)) {
+        leavePlot(plot);
+      }
+      return;
+    }
+    // Shiny reports mouse coordinates. Keep the pointer type from the DOM.
+    var state = stateOf(plot.id);
+    state.touchPlot = event.pointerType === "touch";
+    if (state.touchPlot) {
+      state.hoverTarget = null;
+      if (preview && preview.trigger === plot) {
+        closePreview(plot.id);
+      }
+    }
   }
 
   function onTable(message) {
     // The plot was drawn again, so the server holds a new table. An open
     // panel belongs to the old one, and its row number can point to another
     // group now: close it, as renderValue() does for a value or a table.
-    var state = outputs[message.id];
-    if (state && state.panel) {
+    var state = stateOf(message.id);
+    if (state.panel) {
       closePanel(message.id, state.panel.contains(document.activeElement));
     }
     var container = document.getElementById(message.id + "-whence-table");
     if (container) {
+      state.data = message.table;
+      state.hoverTarget = null;
       renderTable(container, message.id, message.table);
     }
   }
@@ -763,7 +892,7 @@
       body.removeAttribute("aria-busy");
       body.appendChild(make("p", { class: "whence-untraced" }, note));
       if (hover && panel.isConnected) {
-        place(panel, hover.trigger);
+        place(panel, hover.trigger, hover.anchor);
       }
       return;
     }
@@ -784,7 +913,7 @@
     body.appendChild(rowsSection(id, data));
     // The panel grew from "Loading", so it may need a new place.
     if (panel.isConnected) {
-      place(panel, hover ? hover.trigger : state.trigger, hover ? null : state.anchor);
+      place(panel, hover ? hover.trigger : state.trigger, hover ? hover.anchor : state.anchor);
     }
     if (refocus) {
       panel.focus();
@@ -1197,16 +1326,20 @@
     Shiny.outputBindings.register(binding, "whence.value");
     Shiny.addCustomMessageHandler("whence:rows", showRows);
     Shiny.addCustomMessageHandler("whence:group", onGroup);
+    Shiny.addCustomMessageHandler("whence:hover", onHover);
     Shiny.addCustomMessageHandler("whence:table", onTable);
     $(document).on("shiny:unbound", onUnbound);
     $(document).on("shiny:inputchanged", onInputChanged);
     document.addEventListener("keydown", onDocumentKey);
     document.addEventListener("toggle", onPlotDataToggle, true);
+    ["pointerover", "pointermove", "pointerdown", "pointerout"].forEach(function (type) {
+      document.addEventListener(type, onPlotPointer);
+    });
     window.addEventListener("resize", function () {
       if (!previewViewport.matches) {
         closePreview();
       } else if (preview && preview.node) {
-        place(preview.node, preview.trigger);
+        place(preview.node, preview.trigger, preview.anchor);
       }
     });
   }

@@ -44,6 +44,16 @@ test_that("marker and hover are checked strictly", {
   expect_error(whencePlotOutput("p", marker = c("dotted", "dashed")), "`marker` must be one of", fixed = TRUE)
 })
 
+test_that("a plot only has a debounced hover input when previews are enabled", {
+  html <- as.character(whencePlotOutput("p", hover = "cut"))
+  expect_match(html, 'data-hover-id="p_whence_hover"', fixed = TRUE)
+  expect_match(html, 'data-hover-delay="300"', fixed = TRUE)
+  expect_match(html, 'data-hover-delay-type="debounce"', fixed = TRUE)
+  html <- as.character(whencePlotOutput("p", hover = "none"))
+  expect_identical(grepl("data-hover-id", html, fixed = TRUE), FALSE)
+  expect_match(html, 'data-click-id="p_whence_click"', fixed = TRUE)
+})
+
 test_that("renderWhence() checks its arguments", {
   expect_error(renderWhence(1, format = "%.2f"), "`format` must be a function or `NULL`, not character")
   expect_error(renderWhence(1, env = list()), "`env` must be an environment, not list")
@@ -321,7 +331,7 @@ test_that("the default hover shows the biggest cut and closes on Escape and leav
   app$wait_for_js(preview_open, timeout = 3000)
   expect_match(preview_text(app), "6 of 20 rows (30%) make this value.", fixed = TRUE)
   expect_match(preview_text(app), 'Biggest cut: region == "APAC"', fixed = TRUE)
-  expect_match(preview_text(app), "-10 rows (50%)", fixed = TRUE)
+  expect_match(preview_text(app), "\u221210 rows (50%)", fixed = TRUE)
   expect_match(preview_text(app), "Click to see every step$")
   expect_identical(js(app, "document.querySelector('.whence-preview').getAttribute('role')"), "tooltip")
   expect_identical(js(app, paste(
@@ -404,7 +414,7 @@ test_that("a table row preview uses the counts of its group without a request", 
   app$wait_for_js(preview_open, timeout = 3000)
   expect_match(preview_text(app), "6 of 10 rows (60%) make this row.", fixed = TRUE)
   expect_match(preview_text(app), "Biggest cut: year >= 2023", fixed = TRUE)
-  expect_match(preview_text(app), "-4 rows (40%)", fixed = TRUE)
+  expect_match(preview_text(app), "\u22124 rows (40%)", fixed = TRUE)
   expect_null(app$get_value(input = ".whence_request"))
   expect_no_shiny_errors(app)
 })
@@ -925,6 +935,40 @@ test_that("a plot that renders again closes its open panel", {
   app$wait_for_js("document.querySelector('.whence-panel') === null", timeout = 10000)
 
   expect_identical(js(app, "document.querySelector('.whence-backdrop') === null"), TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a plot hover shows the count grid of its bar and closes on NULL", {
+  skip_on_cran()
+  local_dplyr()
+  skip_if_not_installed("ggplot2")
+  app <- local_app_driver(app_path(), name = "plot-hover")
+  app$wait_for_js("document.querySelector('#plot_region img') !== null", timeout = 20000)
+  app$wait_for_js("document.querySelector('#plot_region-whence-table tbody tr') !== null", timeout = 20000)
+  app$run_js("document.querySelector('#plot_region').scrollIntoView({block: 'center'})")
+
+  hover <- list(
+    x = 1, y = 1000, coords_css = list(x = 132, y = 225),
+    mapping = list(x = "reorder(region, total)", y = "total"),
+    domain = list(discrete_limits = list(x = list("APAC", "EMEA")))
+  )
+  counts <- paste(
+    "Array.from(document.querySelectorAll('.whence-preview-step span:last-child'))",
+    ".map(function(count) { return count.textContent; })"
+  )
+  app$set_inputs(plot_region_whence_hover = hover, allow_no_input_binding_ = TRUE, wait_ = FALSE)
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_identical(js(app, counts), list("10", "6", "6", "1"))
+  expect_identical(app$get_value(input = ".whence_request")$action, "hover")
+
+  hover$x <- 2
+  hover$coords_css$x <- 265
+  app$set_inputs(plot_region_whence_hover = hover, allow_no_input_binding_ = TRUE, wait_ = FALSE)
+  app$wait_for_js(paste0("(", counts, ").join('/') === '10/4/4/1'"), timeout = 3000)
+  expect_identical(js(app, counts), list("10", "4", "4", "1"))
+
+  app$set_inputs(plot_region_whence_hover = NULL, allow_no_input_binding_ = TRUE, wait_ = FALSE)
+  app$wait_for_js(paste0("!(", preview_open, ")"))
   expect_no_shiny_errors(app)
 })
 
