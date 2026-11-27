@@ -36,8 +36,10 @@ jobs:
           - {os: ubuntu-latest,  r: 'oldrel-4'}
           # 'arrow' and 'duckplyr' (through duckdb) need R >= 4.2. They are
           # only in Suggests, and their tests skip when they are not
-          # installed, so this job checks without them.
-          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore'}
+          # installed, so this job checks without them. 'ggplot2' 4.0 needs
+          # 'S7', which needs R >= 4.2, so this job uses 'ggplot2' 3.5.2, the
+          # last release before 4.0. The plot tests then still run on R 4.1.
+          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore, ggplot2@3.5.2'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
