@@ -58,6 +58,23 @@ test_that("a group request sends the panel of that row", {
   expect_identical(ls(session$userData$.whence_groups), "tab\0372")
 })
 
+test_that("group replies carry the preview token on success and after removal", {
+  local_dplyr()
+  traces <- list2env(list(tab = region_table()))
+  session <- fake_table_session()
+  request <- list(id = "tab", action = "group", row = 2, preview = "1")
+
+  handle_request(session, traces, request)
+  handle_request(session, traces, list(id = "tab", action = "gone"))
+  handle_request(session, traces, request)
+
+  replies <- lapply(session$sent(), function(sent) sent$message)
+  expect_identical(lapply(replies, function(reply) reply[c("row", "ok", "preview")]), list(
+    list(row = 2L, ok = TRUE, preview = "1"),
+    list(row = 2L, ok = FALSE, preview = "1")
+  ))
+})
+
 test_that("a removed request sends the rows that a step removed", {
   local_dplyr()
   traces <- list2env(list(tab = region_table()))

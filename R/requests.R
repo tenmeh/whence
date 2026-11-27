@@ -11,6 +11,7 @@
 #                     (with `click`, the click data of shiny)
 #           "gone"    the output was removed from the page
 #   row     for a table or a plot: the row of the table that the request is for
+#   preview a token to return with the group reply, so a hover can match it
 #
 # The leading dot keeps the input out of the inputs that an app lists.
 request_input <- ".whence_request"
@@ -113,8 +114,17 @@ handle_request <- function(session, traces, request) {
   }
 
   reply <- if (action %in% c("group", "point")) "whence:group" else "whence:rows"
+  preview <- request$preview
+  send_reply <- function(message) {
+    # Match a hover reply to its render even if the row number was reused.
+    if (identical(action, "group") && is.character(preview) && length(preview) == 1L && !is.na(preview)) {
+      message$row <- message$row %||% request_row(request)
+      message$preview <- preview
+    }
+    session$sendCustomMessage(reply, message)
+  }
   fail <- function(message, row = NULL) {
-    session$sendCustomMessage(reply, list(id = id, row = row, ok = FALSE, message = message))
+    send_reply(list(id = id, row = row, ok = FALSE, message = message))
     invisible()
   }
 
@@ -126,7 +136,7 @@ handle_request <- function(session, traces, request) {
   # An error in an observer ends the session, so each failure is sent to the
   # panel instead.
   tryCatch(
-    answer_request(session, id, trace, action, request, fail),
+    answer_request(session, id, trace, action, request, fail, send_reply),
     error = function(e) fail("Row attribution unavailable: the rows could not be shown.", request_row(request))
   )
   invisible()
@@ -134,7 +144,7 @@ handle_request <- function(session, traces, request) {
 
 
 #' @noRd
-answer_request <- function(session, id, trace, action, request, fail) {
+answer_request <- function(session, id, trace, action, request, fail, send_reply) {
   row <- request_row(request)
 
   if (identical(action, "point")) {
@@ -157,7 +167,7 @@ answer_request <- function(session, id, trace, action, request, fail) {
     if (is.null(row)) {
       return(fail("This row cannot be explained."))
     }
-    session$sendCustomMessage("whence:group", list(
+    send_reply(list(
       id = id,
       row = row,
       ok = TRUE,

@@ -36,6 +36,16 @@
   // the table that it is for.
   var outputs = {};
 
+  // A pending open and the visible preview share one state, even across outputs.
+  var preview = null;
+  var previewViewport = window.matchMedia("(min-width: 576px)");
+  var nextPreviewRequest = 0;
+  var restoringPanelFocus = false;
+  var AGGREGATES = ["summarise", "count", "tally"];
+  var NO_CUT = AGGREGATES.concat([
+    "source", "group_by", "ungroup", "collect", "compute", "as_tibble", "as.data.frame", "distinct"
+  ]);
+
   function request(id, action, extra) {
     var value = { id: id, action: action, at: Date.now() };
     Object.keys(extra || {}).forEach(function (key) {
@@ -123,6 +133,7 @@
     var id = el.id;
     var state = stateOf(id);
     var restoreFocus = state.panel && state.panel.contains(document.activeElement);
+    closePreview(id);
     closePanel(id, false);
     cancelGone(state);
     state.data = data;
@@ -145,16 +156,21 @@
     asTrigger(value, function () {
       openPanel(id, { data: data, trigger: value });
     });
+    bindPreview(id, value, function () {
+      return { stages: data.stages, panel: data, untraced: !data.traced, reason: data.reason };
+    });
     slot.appendChild(value);
     slot.appendChild(make("span", { id: hintId, class: "whence-sr" }, HINT));
     if (restoreFocus) {
-      value.focus();
+      restorePanelFocus(value);
     }
   }
 
   // --- A table ----------------------------------------------------------
 
   function renderTable(container, id, data) {
+    closePreview(id);
+    stateOf(id).previewGroups = {};
     container.textContent = "";
 
     var holder = container.closest("[data-whence-marker]");
@@ -185,6 +201,9 @@
           asTrigger(trigger, function () {
             openGroup(id, index + 1, trigger, null);
           });
+          bindPreview(id, trigger, function () {
+            return rowPreview(data, index + 1);
+          });
           td.appendChild(trigger);
         } else {
           td.textContent = text;
@@ -214,13 +233,356 @@
     container.appendChild(foot);
   }
 
+  function rowPreview(data, row) {
+    var grid = data.hover;
+    var counts = grid && grid.counts && grid.counts[row - 1];
+    if (counts) {
+      var stages = grid.steps.map(function (step, i) {
+        return { label: step.label, kind: step.kind, n: counts[i] };
+      });
+      if (stages.length && Number.isFinite(stages[0].n)) {
+        return { stages: stages, row: row, subject: "row" };
+      }
+    }
+    return {
+      stages: data.panel.stages,
+      row: row,
+      subject: "table",
+      reason: (grid && grid.reason) || "Counts for this row are not known: some steps have no group counts."
+    };
+  }
+
+  // --- Hover previews ----------------------------------------------------
+
+  function summarise(stages) {
+    var source = stages[0] || {};
+    var end = stages.length;
+    stages.forEach(function (stage, index) {
+      if (AGGREGATES.indexOf(stage.kind) !== -1) {
+        end = index;
+      }
+    });
+    // The rows that enter the final summary are the rows that make the result.
+    var to = (stages[Math.max(0, end - 1)] || {}).n;
+    var cut = null;
+    for (var i = 1; i < end; i++) {
+      var stage = stages[i];
+      var before = stages[i - 1].n;
+      if (NO_CUT.indexOf(stage.kind) !== -1) {
+        continue;
+      }
+      var removed = Number.isFinite(stage.delta) ? -stage.delta :
+        (Number.isFinite(before) && Number.isFinite(stage.n) ? before - stage.n : 0);
+      if (removed > 0 && (!cut || removed > cut.removed)) {
+        cut = { label: stage.label, removed: removed, percent: stage.percentText || previewPercent(removed, before) };
+      }
+    }
+    return { from: source.n, to: to, source: source.label, steps: Math.max(0, stages.length - 1), cut: cut };
+  }
+
+  function previewPercent(count, total) {
+    if (!Number.isFinite(total) || total === 0) {
+      return count === 0 ? "0%" : "";
+    }
+    var percent = 100 * count / total;
+    if (percent > 0 && percent < 1) {
+      return "<1%";
+    }
+    return (percent < 100 ? Math.min(99, Math.round(percent)) : Math.round(percent)) + "%";
+  }
+
+  function previewContent(style, summary, stages) {
+    var hint = make("p", { class: "whence-preview-hint" }, "Click to see every step");
+    if (style === "panel") {
+      var dialog = panelFrame(summary.id, summary.row !== undefined, function () {
+        closePreview(summary.id);
+      }, false);
+      fillPanel(summary.id, summary.panel, summary.note, { node: dialog, trigger: summary.trigger });
+      dialog.appendChild(hint);
+      return dialog;
+    }
+
+    var node = make("div", { class: "whence-preview", role: "tooltip" });
+    var known = Number.isFinite(summary.from) && Number.isFinite(summary.to);
+    if (summary.reason) {
+      node.appendChild(make("p", { class: "whence-preview-note" }, summary.reason));
+    }
+    if (!summary.untraced && style === "waterfall") {
+      stages.forEach(function (stage) {
+        var counted = Number.isFinite(stage.n);
+        var amount = counted ? stage.n.toLocaleString("en-GB") : "Unknown";
+        var step = make("div", { class: "whence-preview-step" });
+        step.appendChild(make("span", null, stage.label));
+        step.appendChild(make("span", null, amount));
+        node.appendChild(step);
+        var track = make("div", { class: "whence-preview-track", "aria-hidden": "true" });
+        var bar = make("div", { class: "whence-preview-bar" });
+        bar.style.width = (counted && summary.from > 0 ? 100 * stage.n / summary.from : 0) + "%";
+        track.appendChild(bar);
+        node.appendChild(track);
+      });
+    } else if (!summary.untraced && known) {
+      var from = summary.from.toLocaleString("en-GB");
+      var to = summary.to.toLocaleString("en-GB");
+      if (style === "line") {
+        node.appendChild(make("p", null, "From " + from + " rows of " + summary.source + " to " + to +
+          ", in " + summary.steps + (summary.steps === 1 ? " step." : " steps.")));
+      } else {
+        node.appendChild(make("p", null, to + " of " + from + " rows (" +
+          previewPercent(summary.to, summary.from) + ") make this " + summary.subject + "."));
+        var cut = summary.cut;
+        if (cut) {
+          node.appendChild(make("p", null, "Biggest cut: " + cut.label));
+          node.appendChild(make("p", null, "-" + cut.removed.toLocaleString("en-GB") + " rows" +
+            (cut.percent ? " (" + cut.percent + ")" : "")));
+        } else {
+          node.appendChild(make("p", null, "No step removed rows."));
+        }
+      }
+    } else if (!summary.reason) {
+      node.appendChild(make("p", null, "Row counts are not available."));
+    }
+    node.appendChild(hint);
+    return node;
+  }
+
+  function openPreview(id, trigger, content) {
+    if (!preview || preview.id !== id || preview.trigger !== trigger || preview.node) {
+      closePreview();
+      preview = { id: id, trigger: trigger, node: null, openTimer: null, closeTimer: null };
+    }
+    var active = preview;
+    active.node = content;
+    if (content.getAttribute("role") === "tooltip") {
+      content.id = id + "-whence-preview";
+      active.description = trigger.getAttribute("aria-describedby");
+      trigger.setAttribute("aria-describedby", content.id);
+    } else {
+      content.addEventListener("click", pinPreview, true);
+      content.addEventListener("focusout", function (event) {
+        if (preview === active && !content.contains(event.relatedTarget) &&
+            (event.relatedTarget || !active.overPreview)) {
+          closePreview(id);
+        }
+      });
+    }
+    content.addEventListener("pointerover", function (event) {
+      if (event.pointerType !== "touch" && preview === active) {
+        active.overPreview = true;
+        window.clearTimeout(active.closeTimer);
+      }
+    });
+    content.addEventListener("pointerout", function (event) {
+      if (event.pointerType !== "touch" && preview === active && !content.contains(event.relatedTarget)) {
+        active.overPreview = false;
+        if (!trigger.contains(event.relatedTarget)) {
+          leavePreview(active);
+        }
+      }
+    });
+    document.body.appendChild(content);
+    place(content, trigger);
+  }
+
+  function closePreview(id) {
+    if (!preview || (id !== undefined && preview.id !== id)) {
+      return;
+    }
+    var active = preview;
+    preview = null;
+    window.clearTimeout(active.openTimer);
+    window.clearTimeout(active.closeTimer);
+    if (active.node) {
+      if (active.description === null) {
+        active.trigger.removeAttribute("aria-describedby");
+      } else if (active.description !== undefined) {
+        active.trigger.setAttribute("aria-describedby", active.description);
+      }
+      active.node.remove();
+    }
+  }
+
+  function leavePreview(active) {
+    if (active.overPreview) {
+      return;
+    }
+    if (!active.node) {
+      closePreview(active.id);
+      return;
+    }
+    window.clearTimeout(active.closeTimer);
+    active.closeTimer = window.setTimeout(function () {
+      if (preview === active) {
+        closePreview(active.id);
+      }
+    }, 200);
+  }
+
+  function bindPreview(id, trigger, getStages) {
+    var pointerFocus = false;
+    function start(focus) {
+      var holder = trigger.closest("[data-whence-hover]");
+      var style = holder && holder.getAttribute("data-whence-hover");
+      if (!style || style === "none" || !previewViewport.matches ||
+          Object.keys(outputs).some(function (key) { return outputs[key].panel; })) {
+        return;
+      }
+      if (preview && preview.trigger === trigger) {
+        window.clearTimeout(preview.closeTimer);
+        if (preview.node || !focus) {
+          return;
+        }
+      }
+      closePreview();
+      var active = { id: id, trigger: trigger, node: null, openTimer: null, closeTimer: null };
+      preview = active;
+      var show = function () {
+        if (preview !== active || !trigger.isConnected || !previewViewport.matches) {
+          return;
+        }
+        var data = getStages();
+        var stages = data.stages || [];
+        if (style === "panel") {
+          showPanelPreview(active, data);
+        } else {
+          var summary = summarise(stages);
+          summary.reason = data.reason;
+          summary.untraced = data.untraced;
+          summary.subject = data.subject || "value";
+          openPreview(id, trigger, previewContent(style, summary, stages));
+        }
+      };
+      if (focus) {
+        show();
+      } else {
+        active.openTimer = window.setTimeout(show, 300);
+      }
+    }
+
+    trigger.addEventListener("pointerover", function (event) {
+      if (event.pointerType !== "touch" && !trigger.contains(event.relatedTarget)) {
+        start(false);
+      }
+    });
+    trigger.addEventListener("pointerout", function (event) {
+      if (event.pointerType !== "touch" && preview && preview.trigger === trigger &&
+          !trigger.contains(event.relatedTarget)) {
+        leavePreview(preview);
+      }
+    });
+    trigger.addEventListener("pointerdown", function () {
+      // Focus from a press should keep the pointer delay, or stay off on touch.
+      pointerFocus = true;
+    });
+    trigger.addEventListener("pointercancel", function () {
+      pointerFocus = false;
+    });
+    trigger.addEventListener("focus", function () {
+      if (!pointerFocus && !restoringPanelFocus) {
+        start(true);
+      }
+      pointerFocus = false;
+    });
+    trigger.addEventListener("blur", function (event) {
+      pointerFocus = false;
+      if (preview && preview.trigger === trigger) {
+        var dialog = preview.node && preview.node.getAttribute("role") === "dialog";
+        // A dialog can take focus when the pointer enters one of its controls.
+        if (!dialog || (!preview.node.contains(event.relatedTarget) && !(preview.overPreview && !event.relatedTarget))) {
+          closePreview(id);
+        }
+      }
+    });
+  }
+
+  function showPanelPreview(active, data) {
+    var entry;
+    var needsReply = false;
+    if (data.row !== undefined) {
+      var groups = outputs[active.id].previewGroups;
+      entry = groups[data.row];
+      if (!entry) {
+        needsReply = true;
+        groups[data.row] = entry = { token: String(++nextPreviewRequest), reply: null };
+      }
+      active.entry = entry;
+      active.row = data.row;
+    }
+    var reply = entry && entry.reply;
+    var summary = {
+      id: active.id,
+      trigger: active.trigger,
+      row: active.row,
+      panel: entry ? reply && reply.panel : data.panel,
+      note: reply && reply.message
+    };
+    openPreview(active.id, active.trigger, previewContent("panel", summary, []));
+    if (needsReply) {
+      request(active.id, "group", { row: active.row, preview: entry.token });
+    }
+  }
+
+  // Reuse the normal trigger. If a preview control was clicked, run its
+  // matching action in the pinned panel so rows and copy work there.
+  function pinPreview(event) {
+    var active = preview;
+    var button = event.target.closest("button");
+    if (!active || (button && button.classList.contains("whence-close"))) {
+      return;
+    }
+    var index = Array.prototype.indexOf.call(active.node.querySelectorAll("button"), button);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    active.trigger.click();
+    var panel = outputs[active.id].panel;
+    if (panel && index !== -1) {
+      var control = panel.querySelectorAll("button")[index];
+      if (control) {
+        control.focus();
+        control.click();
+      }
+    }
+  }
+
   function openGroup(id, row, trigger, anchor) {
-    openPanel(id, { data: null, trigger: trigger, anchor: anchor, row: row, group: true });
-    request(id, "group", { row: row });
+    var entry = preview && preview.trigger === trigger && preview.entry;
+    var reply = entry && entry.reply;
+    openPanel(id, {
+      data: reply ? reply.panel : null,
+      note: reply && reply.message,
+      trigger: trigger,
+      anchor: anchor,
+      row: row,
+      group: true,
+      pendingPreview: entry && !reply ? entry.token : null
+    });
+    if (!entry) {
+      request(id, "group", { row: row });
+    }
   }
 
   function onGroup(message) {
     var state = outputs[message.id];
+    if (message.preview !== undefined) {
+      var entry = state && state.previewGroups && state.previewGroups[message.row];
+      if (!entry || entry.token !== message.preview) {
+        return;
+      }
+      entry.reply = message;
+      if (!message.ok) {
+        delete state.previewGroups[message.row];
+      }
+      if (preview && preview.entry === entry) {
+        fillPanel(message.id, message.panel, message.message, preview);
+      }
+      // A hover reply can also finish a panel pinned while it was loading.
+      if (state.pendingPreview !== entry.token) {
+        return;
+      }
+      state.pendingPreview = null;
+    } else if (state && state.pendingPreview) {
+      return;
+    }
     if (!state || !state.panel) {
       return;
     }
@@ -277,43 +639,47 @@
 
   // --- The panel --------------------------------------------------------
 
+  function panelFrame(id, group, close, modal) {
+    var label = labelOf(id);
+    var titleId = id + (modal ? "-whence-title" : "-whence-preview-title");
+    var panel = make("div", {
+      class: modal ? "whence-panel" : "whence-preview whence-preview-panel",
+      role: "dialog",
+      "aria-modal": modal ? "true" : null,
+      "aria-labelledby": titleId,
+      tabindex: "-1",
+      "data-whence-for": id
+    });
+    var header = make("div", { class: "whence-header" });
+    var title = group ? "Where this row came from" :
+      (label ? "Where " + label + " came from" : "Where this number came from");
+    header.appendChild(make("h2", { id: titleId, class: "whence-title" }, title));
+    var button = make("button", { type: "button", class: "whence-close", "aria-label": "Close" }, CLOSE);
+    button.addEventListener("click", close);
+    header.appendChild(button);
+    panel.appendChild(header);
+    panel.appendChild(make("div", { class: "whence-body" }));
+    return panel;
+  }
+
   // options: data (the panel, or null while it loads), trigger (the element
   // that gets the focus back), anchor (a point to put the panel under, in
   // place of the trigger), row (the row of a table, or null), group (TRUE
   // for the panel of a row of a table or a point of a plot).
   function openPanel(id, options) {
+    closePreview();
     var state = stateOf(id);
     if (state.panel) {
       closePanel(id, false);
     }
-    var label = labelOf(id);
-    var titleId = id + "-whence-title";
-
     var backdrop = make("div", { class: "whence-backdrop" });
     backdrop.addEventListener("click", function () {
       closePanel(id, true);
     });
 
-    var panel = make("div", {
-      class: "whence-panel",
-      role: "dialog",
-      "aria-modal": "true",
-      "aria-labelledby": titleId,
-      tabindex: "-1",
-      "data-whence-for": id
-    });
-
-    var header = make("div", { class: "whence-header" });
-    var title = options.group ? "Where this row came from" :
-      (label ? "Where " + label + " came from" : "Where this number came from");
-    header.appendChild(make("h2", { id: titleId, class: "whence-title" }, title));
-    var close = make("button", { type: "button", class: "whence-close", "aria-label": "Close" }, CLOSE);
-    close.addEventListener("click", function () {
+    var panel = panelFrame(id, options.group, function () {
       closePanel(id, true);
-    });
-    header.appendChild(close);
-    panel.appendChild(header);
-    panel.appendChild(make("div", { class: "whence-body" }));
+    }, true);
 
     panel.addEventListener("keydown", function (event) {
       onPanelKey(id, event);
@@ -326,11 +692,12 @@
     state.trigger = options.trigger || null;
     state.row = options.row === undefined ? null : options.row;
     state.anchor = options.anchor || null;
+    state.pendingPreview = options.pendingPreview || null;
 
     if (state.trigger) {
       state.trigger.setAttribute("aria-expanded", "true");
     }
-    fillPanel(id, options.data);
+    fillPanel(id, options.data, options.note);
     place(panel, state.trigger, options.anchor);
     // The panel of a plot click does not know its row yet; onGroup() tells
     // the app when it does.
@@ -355,6 +722,15 @@
   // While a panel is open, Escape closes it and Tab goes back into it, also
   // when the focus has left the panel.
   function onDocumentKey(event) {
+    if (preview && (event.key === "Escape" || event.key === "Esc")) {
+      event.preventDefault();
+      var trigger = preview.node && preview.node.contains(document.activeElement) ? preview.trigger : null;
+      closePreview();
+      if (trigger) {
+        restorePanelFocus(trigger);
+      }
+      return;
+    }
     var id = Object.keys(outputs).filter(function (key) {
       return outputs[key].panel;
     })[0];
@@ -376,15 +752,19 @@
 
   // Put the content in the panel: the data, "Loading" while it is null, or
   // a note when the server could not explain it.
-  function fillPanel(id, data, note) {
+  function fillPanel(id, data, note, hover) {
     var state = outputs[id];
-    var body = state.panel.querySelector(".whence-body");
-    var refocus = state.panel.contains(document.activeElement) && document.activeElement !== state.panel;
+    var panel = hover ? hover.node : state.panel;
+    var body = panel.querySelector(".whence-body");
+    var refocus = panel.contains(document.activeElement) && document.activeElement !== panel;
     body.textContent = "";
 
     if (note) {
       body.removeAttribute("aria-busy");
       body.appendChild(make("p", { class: "whence-untraced" }, note));
+      if (hover && panel.isConnected) {
+        place(panel, hover.trigger);
+      }
       return;
     }
     if (!data) {
@@ -403,9 +783,11 @@
     body.appendChild(codeSection(data));
     body.appendChild(rowsSection(id, data));
     // The panel grew from "Loading", so it may need a new place.
-    place(state.panel, state.trigger, state.anchor);
+    if (panel.isConnected) {
+      place(panel, hover ? hover.trigger : state.trigger, hover ? null : state.anchor);
+    }
     if (refocus) {
-      state.panel.focus();
+      panel.focus();
     }
   }
 
@@ -540,6 +922,10 @@
       return;
     }
     var margin = 8;
+    var hover = panel.classList.contains("whence-preview");
+    if (hover) {
+      panel.style.removeProperty("--whence-preview-height");
+    }
     var width = panel.offsetWidth;
     var height = panel.offsetHeight;
     var view = document.documentElement.clientHeight;
@@ -548,7 +934,17 @@
     left = Math.max(window.scrollX + margin, Math.min(left, maxLeft));
     var top = rect.bottom + 6;
     var rectTop = rect.top === undefined ? rect.bottom : rect.top;
-    if (top + height > view - margin && rectTop - 6 - height > view - top - height) {
+    if (hover) {
+      // A tall preview scrolls within the available space so the trigger
+      // stays clear and the pointer can get back to it.
+      var below = view - margin - top;
+      var above = rectTop - 6 - margin;
+      var flip = height > below && above > below;
+      panel.style.setProperty("--whence-preview-height", Math.max(0, flip ? above : below) + "px");
+      if (flip) {
+        top = rectTop - 6 - panel.offsetHeight;
+      }
+    } else if (top + height > view - margin && rectTop - 6 - height > view - top - height) {
       top = Math.max(margin, rectTop - 6 - height);
     }
     panel.style.setProperty("--whence-top", top + window.scrollY + "px");
@@ -604,14 +1000,24 @@
     var trigger = state.trigger;
     state.trigger = null;
     state.row = null;
+    state.pendingPreview = null;
     if (trigger && document.body.contains(trigger)) {
       trigger.setAttribute("aria-expanded", "false");
       if (restoreFocus) {
         if (!trigger.hasAttribute("tabindex")) {
           trigger.setAttribute("tabindex", "-1");
         }
-        trigger.focus();
+        restorePanelFocus(trigger);
       }
+    }
+  }
+
+  function restorePanelFocus(trigger) {
+    restoringPanelFocus = true;
+    try {
+      trigger.focus();
+    } finally {
+      restoringPanelFocus = false;
     }
   }
 
@@ -727,6 +1133,7 @@
       return;
     }
     var id = el.id;
+    closePreview(id);
     var state = outputs[id];
     if (!state) {
       // A plot whose panel was never opened still has a trace on the server.
@@ -772,6 +1179,7 @@
     };
     binding.renderValue = renderValue;
     binding.renderError = function (el, err) {
+      closePreview(el.id);
       closePanel(el.id, false);
       el.classList.add("shiny-output-error");
       if (err && err.type) {
@@ -794,6 +1202,13 @@
     $(document).on("shiny:inputchanged", onInputChanged);
     document.addEventListener("keydown", onDocumentKey);
     document.addEventListener("toggle", onPlotDataToggle, true);
+    window.addEventListener("resize", function () {
+      if (!previewViewport.matches) {
+        closePreview();
+      } else if (preview && preview.node) {
+        place(preview.node, preview.trigger);
+      }
+    });
   }
 
   if (window.Shiny && window.Shiny.OutputBinding) {

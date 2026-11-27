@@ -115,7 +115,8 @@
   background: transparent;
 }
 
-.whence-panel {
+.whence-panel,
+.whence-preview {
   position: absolute;
   top: var(--whence-top, 4em);
   left: var(--whence-left, 1em);
@@ -133,6 +134,9 @@
   font-size: var(--bs-body-font-size, 14px);
   line-height: 1.4;
   text-align: left;
+}
+
+.whence-panel {
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 120ms ease-out, transform 120ms ease-out;
@@ -145,6 +149,49 @@
 
 .whence-panel:focus {
   outline: none;
+}
+
+/* --- Hover previews --------------------------------------------------------- */
+.whence-preview {
+  z-index: 1059;
+  box-sizing: border-box;
+  max-height: min(36em, var(--whence-preview-height, calc(100vh - 2em)));
+}
+
+.whence-preview[role="tooltip"] {
+  width: max-content;
+  max-width: min(25em, calc(100vw - 1em));
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.whence-preview[role="tooltip"] p {
+  margin: 0 0 0.25em;
+}
+
+.whence-preview .whence-preview-hint {
+  margin: 0.5em 0 0;
+  color: var(--whence-muted);
+  font-size: 0.875em;
+}
+
+.whence-preview-step {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75em;
+}
+
+.whence-preview-track {
+  overflow: hidden;
+  margin: 0.25em 0 0.5em;
+  border-radius: var(--whence-radius);
+  background: var(--whence-code-bg);
+}
+
+.whence-preview-bar {
+  height: 0.3em;
+  border-radius: inherit;
+  background: var(--whence-accent);
 }
 
 .whence-header {
@@ -353,6 +400,10 @@
 /* --- Responsive overrides --------------------------------------------------- */
 /* Below Bootstrap's sm breakpoint the panel is a sheet at the bottom. */
 @media (max-width: 575.98px) {
+  .whence-preview {
+    display: none;
+  }
+
   .whence-panel {
     position: fixed;
     top: auto;

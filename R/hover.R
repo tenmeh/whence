@@ -1,28 +1,29 @@
+#' Keep the replay so hover counts and row clicks share the same pass
+#' @noRd
 attach_replay <- function(trace) {
   replay <- if (!identical(getOption("whence.hover"), "none")) {
     tryCatch(
       replay_trace(trace),
-      error = function(e) list(ok = FALSE, reason = "the replay failed.")
+      error = function(e) c(list(ok = FALSE), lost_identity(NA_character_, "the replay failed"))
     )
   }
   # Keep successful replays for clicks and only the reason for failed ones.
   trace$replay <- if (isTRUE(replay$ok)) replay
-  trace$hover_reason <- if (isFALSE(replay$ok)) group_reason(trace, replay)
+  trace$hover_reason <- if (isFALSE(replay$ok)) {
+    reason <- row_count_reason(trace, replay)
+    if (is.null(replay$why)) paste0("the replay stops at ", reason) else reason
+  }
   trace
 }
 
 
+#' Give the browser counts for shown rows so hover can open without a request
+#' @noRd
 hover_grid <- function(trace) {
   replay <- trace$replay
   if (is.null(replay) || is.null(trace$keys)) {
-    reason <- trace$hover_reason %||% if (is.null(trace$keys)) {
-      "the table does not keep the group columns of its last summary."
-    } else {
-      "the pipeline was not replayed."
-    }
-    reason <- sub("^Counts for this group are not known: ", "", reason)
-    reason <- sub("^Counts for this group are not known past ", "the replay stops at ", reason)
-    return(list(steps = NULL, counts = NULL, reason = paste0("Counts for this row are not known: ", reason)))
+    reason <- trace$hover_reason %||% row_count_reason(trace, NULL)
+    return(list(steps = NULL, counts = NULL, reason = paste0("Counts for this row are not known: ", reason, ".")))
   }
 
   stages <- trace$stages
@@ -38,4 +39,20 @@ hover_grid <- function(trace) {
     counts = lapply(seq_len(n_rows), function(row) vapply(counts, `[[`, integer(1), row)),
     reason = NULL
   )
+}
+
+
+#' The reason for missing counts, without the wording of a panel or preview
+#' @noRd
+row_count_reason <- function(table, replay) {
+  if (is.null(replay)) {
+    if (is.null(table$keys)) {
+      return("the table does not keep the group columns of its last summary")
+    }
+    return("the pipeline was not replayed")
+  }
+  if (!replay$ok) {
+    return(replay$why %||% replay_stop_step(replay$verb))
+  }
+  row_origin(table)$prefix_reason
 }

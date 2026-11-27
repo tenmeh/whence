@@ -251,13 +251,15 @@ identity_pass <- function(trace) {
 #' still recorded.
 #' @noRd
 replay_trace <- function(trace) {
-  out <- list(ok = FALSE, rows = NULL, verb = NA_character_, reason = NULL, sources = list(), codes = list())
+  out <- list(
+    ok = FALSE, rows = NULL, verb = NA_character_, why = NULL, reason = NULL, sources = list(), codes = list()
+  )
   # The record grows in an environment, so that record() can add to it.
   rec <- new.env(parent = emptyenv())
   rec$sources <- list()
   rec$codes <- list()
   stop_with <- function(lost) {
-    out[c("verb", "reason")] <- lost[c("verb", "reason")]
+    out[c("verb", "why", "reason")] <- lost[c("verb", "why", "reason")]
     out$sources <- rec$sources
     out$codes <- rec$codes
     out
@@ -548,12 +550,17 @@ resolve_ids <- function(ids, id_map) {
 lost_identity <- function(verb, why = NULL) {
   reason <- if (!is.null(why)) {
     paste0("Row attribution unavailable: ", why, ".")
-  } else if (is.na(verb)) {
-    "Row attribution unavailable past a step that is not a known verb."
   } else {
-    paste0("Row attribution unavailable past ", verb, "().")
+    paste0("Row attribution unavailable past ", replay_stop_step(verb), ".")
   }
-  list(rows = NULL, verb = verb, reason = reason)
+  list(rows = NULL, verb = verb, why = why, reason = reason)
+}
+
+
+#' Name the step where the replay stops, so each caller can explain it
+#' @noRd
+replay_stop_step <- function(verb) {
+  if (is.na(verb)) "a step that is not a known verb" else paste0(verb, "()")
 }
 
 
