@@ -11,6 +11,10 @@ sales <- data.frame(
   stringsAsFactors = FALSE
 )
 managers <- data.frame(region = c("APAC", "APAC", "EMEA"), manager = c("Kim", "Pat", "Lou"))
+markers <- c(
+  revenue = "dotted", marker_dashed = "dashed", marker_highlight = "highlight",
+  marker_mark = "mark", marker_none = "none"
+)
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
@@ -24,7 +28,10 @@ ui <- fluidPage(
   whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px"),
   actionButton("drop", "Remove the joined output"),
   actionButton("rebuild", "Rebuild the dynamic output"),
-  tags$button(id = "after", type = "button", "A control after the outputs")
+  tags$button(id = "after", type = "button", "A control after the outputs"),
+  lapply(names(markers), function(id) {
+    tags$p(whenceOutput(id, marker = markers[[id]]))
+  })
 )
 
 server <- function(input, output, session) {
@@ -35,6 +42,15 @@ server <- function(input, output, session) {
       summarise(total = sum(revenue)),
     format = function(x) paste0("$", format(x, big.mark = ","))
   )
+  revenue <- quote(
+    sales |>
+      filter(region == input$region) |>
+      filter(year >= 2023) |>
+      summarise(total = sum(revenue))
+  )
+  for (id in names(markers)) {
+    output[[id]] <- renderWhence(revenue, quoted = TRUE)
+  }
   output$customers <- renderWhence(
     sales |>
       filter(region == input$region) |>

@@ -109,6 +109,14 @@
     return node;
   }
 
+  function appendMark(node) {
+    var mark = make("span", { class: "whence-mark", "aria-hidden": "true" });
+    mark.appendChild(make("i"));
+    mark.appendChild(make("i"));
+    mark.appendChild(make("i"));
+    node.appendChild(mark);
+  }
+
   // --- A value ----------------------------------------------------------
 
   function renderValue(el, data) {
@@ -131,6 +139,9 @@
 
     var hintId = id + "-whence-hint";
     var value = make("span", { class: "whence-value", "aria-describedby": hintId }, data.value);
+    if (el.getAttribute("data-whence-marker") === "mark") {
+      appendMark(value);
+    }
     asTrigger(value, function () {
       openPanel(id, { data: data, trigger: value });
     });
@@ -146,6 +157,8 @@
   function renderTable(container, id, data) {
     container.textContent = "";
 
+    var holder = container.closest("[data-whence-marker]");
+    var marked = holder && holder.getAttribute("data-whence-marker") === "mark";
     var wrap = make("div", { class: "whence-table-wrap" });
     var table = make("table", { class: "whence-table table table-sm" });
     var head = make("thead");
@@ -166,6 +179,9 @@
             class: "whence-value",
             "aria-label": "Explain the row " + cells.join(", ")
           }, text);
+          if (marked) {
+            appendMark(trigger);
+          }
           asTrigger(trigger, function () {
             openGroup(id, index + 1, trigger, null);
           });

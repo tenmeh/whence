@@ -39,17 +39,23 @@
 #'   shinyApp(ui, server)
 #' }
 #' @export
-whencePlotOutput <- function(outputId, label = NULL, width = "100%", height = "400px") { # nolint: object_name_linter.
+whencePlotOutput <- function(outputId, label = NULL, width = "100%", height = "400px", # nolint: object_name_linter.
+                             marker = getOption("whence.marker", "dotted"),
+                             hover = getOption("whence.hover", "cut")) {
   if (!is.character(outputId) || length(outputId) != 1 || !nzchar(outputId)) {
     stop("`outputId` must be a single string.", call. = FALSE)
   }
   check_string_or_null(label, "label")
+  check_choice(marker, "marker", marker_styles)
+  check_choice(hover, "hover", hover_styles)
 
   htmltools::attachDependencies(
     htmltools::tags$div(
       class = "whence-plot",
       `data-whence-id` = outputId,
       `data-label` = label,
+      `data-whence-marker` = marker,
+      `data-whence-hover` = hover,
       if (!is.null(label)) htmltools::tags$div(class = "whence-label", label),
       shiny::plotOutput(
         outputId,
@@ -103,6 +109,7 @@ renderWhencePlot <- function(expr, plot, format = NULL, width = "auto", height =
     session <- shiny::getDefaultReactiveDomain()
     name <- if (!is.null(session)) shiny::getCurrentOutputInfo(session)$name
     if (!is.null(name)) {
+      trace <- attach_replay(trace)
       remember_trace(session, name, trace, format)
       root_session(session)$sendCustomMessage(
         "whence:table",

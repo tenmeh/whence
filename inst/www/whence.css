@@ -13,6 +13,8 @@
   --whence-removed: var(--bs-danger-text-emphasis, inherit);
   --whence-code-bg: var(--bs-tertiary-bg, rgba(127, 127, 127, 0.12));
   --whence-radius: var(--bs-border-radius, 0.375em);
+  --whence-accent: var(--bs-primary, #7356D6);
+  --whence-underline-thickness: 2px;
 }
 
 /* --- The value -------------------------------------------------------------- */
@@ -32,6 +34,58 @@
 
 .whence-value:hover {
   text-decoration-style: solid;
+}
+
+[data-whence-marker="dashed"] .whence-value {
+  text-decoration: underline dashed var(--whence-accent) var(--whence-underline-thickness);
+}
+
+[data-whence-marker="dashed"] .whence-value:hover {
+  color: var(--whence-accent);
+  text-decoration-style: solid;
+}
+
+[data-whence-marker="highlight"] .whence-value {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--whence-accent) 55%, transparent);
+}
+
+[data-whence-marker="highlight"] .whence-value:hover {
+  background: color-mix(in srgb, var(--whence-accent) 15%, transparent);
+  border-radius: 0.4em;
+}
+
+[data-whence-marker="mark"] .whence-value,
+[data-whence-marker="none"] .whence-value {
+  text-decoration: none;
+}
+
+.whence-mark {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.12em;
+  height: 0.8em;
+  margin-left: 0.35em;
+  color: var(--whence-accent);
+  opacity: 0.35;
+}
+
+.whence-mark i {
+  width: 0.16em;
+  height: 100%;
+  background: currentColor;
+}
+
+.whence-mark i:nth-child(2) {
+  height: 65%;
+}
+
+.whence-mark i:nth-child(3) {
+  height: 35%;
+}
+
+.whence-value:hover .whence-mark {
+  opacity: 1;
 }
 
 .whence-value:focus-visible {

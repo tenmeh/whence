@@ -16,6 +16,34 @@ test_that("whenceOutput() checks its arguments", {
   expect_error(whenceOutput("x", label = 1), "`label` must be")
 })
 
+test_that("marker and hover default to the options and reach the HTML", {
+  withr::local_options(whence.marker = NULL, whence.hover = NULL)
+  html <- as.character(whenceOutput("x"))
+  expect_match(html, 'data-whence-marker="dotted"', fixed = TRUE)
+  expect_match(html, 'data-whence-hover="cut"', fixed = TRUE)
+
+  withr::local_options(whence.marker = "dashed", whence.hover = "waterfall")
+  html <- as.character(whenceTableOutput("t"))
+  expect_match(html, 'data-whence-marker="dashed"', fixed = TRUE)
+  expect_match(html, 'data-whence-hover="waterfall"', fixed = TRUE)
+  expect_match(
+    as.character(whencePlotOutput("p", hover = "none")),
+    'data-whence-hover="none"',
+    fixed = TRUE
+  )
+})
+
+test_that("marker and hover are checked strictly", {
+  expect_error(
+    whenceOutput("x", hover = "cu"),
+    '`hover` must be one of "cut", "line", "waterfall", "panel" or "none", not "cu".',
+    fixed = TRUE
+  )
+  expect_error(whenceOutput("x", marker = "Dotted"), "`marker` must be one of", fixed = TRUE)
+  expect_error(whenceTableOutput("t", hover = NA), "`hover` must be one of", fixed = TRUE)
+  expect_error(whencePlotOutput("p", marker = c("dotted", "dashed")), "`marker` must be one of", fixed = TRUE)
+})
+
 test_that("renderWhence() checks its arguments", {
   expect_error(renderWhence(1, format = "%.2f"), "`format` must be a function or `NULL`, not character")
   expect_error(renderWhence(1, env = list()), "`env` must be an environment, not list")
@@ -252,6 +280,23 @@ wait_for_output <- function(app, id) {
     timeout = 20000
   )
 }
+
+test_that("each marker style draws its own cue", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "markers")
+  style <- function(id, prop) {
+    js(app, sprintf("getComputedStyle(document.querySelector('#%s .whence-value')).%s", id, prop))
+  }
+  wait_for_output(app, "marker_none")
+  expect_match(style("revenue", "textDecorationStyle"), "dotted")
+  expect_match(style("marker_dashed", "textDecorationStyle"), "dashed")
+  expect_identical(js(app, "document.querySelectorAll('#marker_mark .whence-mark').length"), 1L)
+  expect_match(style("marker_none", "textDecorationLine"), "none")
+  expect_match(style("marker_highlight", "textDecorationStyle"), "dotted")
+  expect_identical(js(app, "document.querySelector('#marker_none .whence-value').tabIndex"), 0L)
+  expect_no_shiny_errors(app)
+})
 
 test_that("a click opens the panel with no trip to the server", {
   skip_on_cran()

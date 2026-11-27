@@ -5,7 +5,14 @@
 \alias{renderWhencePlot}
 \title{A plot whose bars and points explain where they came from}
 \usage{
-whencePlotOutput(outputId, label = NULL, width = "100\%", height = "400px")
+whencePlotOutput(
+  outputId,
+  label = NULL,
+  width = "100\%",
+  height = "400px",
+  marker = getOption("whence.marker", "dotted"),
+  hover = getOption("whence.hover", "cut")
+)
 
 renderWhencePlot(
   expr,
@@ -28,6 +35,17 @@ renderWhencePlot(
 uses it in its heading too.}
 
 \item{width, height}{The size of the plot, as for \code{\link[shiny:plotOutput]{shiny::plotOutput()}}.}
+
+\item{marker}{The cue on a clickable value or table cell. One of
+\code{"dotted"}, \code{"dashed"}, \code{"highlight"}, \code{"mark"} (a small waterfall mark)
+or \code{"none"}. Defaults to option \code{whence.marker}, or \code{"dotted"} when unset.}
+
+\item{hover}{The preview to show on hover or keyboard focus. One of
+\code{"cut"} (the biggest cut), \code{"line"} (a one-line summary), \code{"waterfall"},
+\code{"panel"} (the full panel) or \code{"none"}. Defaults to option \code{whence.hover},
+or \code{"cut"} when unset. Tables and plots still replay the pipeline for
+preview counts with \code{hover = "none"} in the UI. Set
+\code{options(whence.hover = "none")} to skip the replay at render time.}
 
 \item{expr}{A pipeline that ends in a summary table.}
 

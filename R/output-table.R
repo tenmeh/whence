@@ -9,8 +9,8 @@
 #'
 #' `renderWhenceTable()` makes the table. Give it a pipeline that ends in a
 #' summary, as for [whence_table()]. The table itself is sent with the render.
-#' The panel of a row needs one trip to the server, because it replays the
-#' steps for its group.
+#' The panel of a row needs one trip to the server. It reuses the replay of
+#' the steps when the render has already made one.
 #'
 #' The rows can be explained when the group columns of the last summary step
 #' are in the table. The table shows at most 500 rows.
@@ -38,17 +38,23 @@
 #'   shinyApp(ui, server)
 #' }
 #' @export
-whenceTableOutput <- function(outputId, label = NULL) { # nolint: object_name_linter.
+whenceTableOutput <- function(outputId, label = NULL, # nolint: object_name_linter.
+                              marker = getOption("whence.marker", "dotted"),
+                              hover = getOption("whence.hover", "cut")) {
   if (!is.character(outputId) || length(outputId) != 1 || !nzchar(outputId)) {
     stop("`outputId` must be a single string.", call. = FALSE)
   }
   check_string_or_null(label, "label")
+  check_choice(marker, "marker", marker_styles)
+  check_choice(hover, "hover", hover_styles)
 
   htmltools::attachDependencies(
     htmltools::tags$div(
       id = outputId,
       class = "whence-output whence-table-output",
       `data-label` = label,
+      `data-whence-marker` = marker,
+      `data-whence-hover` = hover,
       if (!is.null(label)) htmltools::tags$div(class = "whence-label", label),
       htmltools::tags$div(class = "whence-slot")
     ),
@@ -78,8 +84,9 @@ renderWhenceTable <- function(expr, format = NULL, # nolint: object_name_linter.
   shiny::createRenderFunction(
     function() trace_expr(expr, env, mode = "table", lazy = lazy),
     transform = function(value, session, name, ...) {
-      remember_trace(session, name, value, format)
-      table_payload(value, format)
+      trace <- attach_replay(value)
+      remember_trace(session, name, trace, format)
+      table_payload(trace, format)
     },
     outputFunc = whenceTableOutput,
     outputArgs = outputArgs,
@@ -109,6 +116,7 @@ table_payload <- function(trace, format = NULL) {
     keysReason = if (is.null(trace$keys)) {
       "The rows cannot be explained one by one: the table does not keep the group columns of its last summary."
     },
+    hover = hover_grid(trace),
     panel = c(list(value = paste(format_count(nrow(value)), if (nrow(value) == 1) "row" else "rows")),
               panel_payload(trace))
   )

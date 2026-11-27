@@ -127,7 +127,7 @@ whence_group <- function(table, ..., row = NULL) {
   }
   row <- as.integer(row)
 
-  replay <- replay_trace(table)
+  replay <- table$replay %||% replay_trace(table)
   structure(
     list(
       value = table$value[row, , drop = FALSE],
