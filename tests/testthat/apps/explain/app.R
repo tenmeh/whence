@@ -11,6 +11,11 @@ sales <- data.frame(
   stringsAsFactors = FALSE
 )
 managers <- data.frame(region = c("APAC", "APAC", "EMEA"), manager = c("Kim", "Pat", "Lou"))
+markers <- c(
+  revenue = "dotted", marker_dashed = "dashed", marker_highlight = "highlight",
+  marker_mark = "mark", marker_none = "none"
+)
+hovers <- c(hover_line = "line", hover_waterfall = "waterfall", hover_none = "none", hover_panel = "panel")
 
 ui <- fluidPage(
   selectInput("region", "Region", c("APAC", "EMEA")),
@@ -21,10 +26,22 @@ ui <- fluidPage(
   tags$p(whenceOutput("joined_one", label = "One repeated match")),
   uiOutput("dynamic"),
   whenceTableOutput("by_region", label = "Revenue by region"),
-  whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px"),
+  whencePlotOutput("plot_region", label = "Revenue by region", width = "400px", height = "300px", hover = "waterfall"),
   actionButton("drop", "Remove the joined output"),
   actionButton("rebuild", "Rebuild the dynamic output"),
-  tags$button(id = "after", type = "button", "A control after the outputs")
+  tags$button(id = "after", type = "button", "A control after the outputs"),
+  lapply(names(markers), function(id) {
+    tags$p(whenceOutput(id, marker = markers[[id]]))
+  }),
+  lapply(names(hovers), function(id) {
+    tags$p(whenceOutput(id, hover = hovers[[id]]))
+  }),
+  tags$p(whenceOutput("hover_untraced")),
+  tags$p(whenceOutput("hover_one")),
+  tags$p(whenceOutput("hover_update")),
+  whenceTableOutput("hover_rows"),
+  whenceTableOutput("hover_fallback"),
+  whenceTableOutput("by_region_panel", hover = "panel")
 )
 
 server <- function(input, output, session) {
@@ -35,6 +52,22 @@ server <- function(input, output, session) {
       summarise(total = sum(revenue)),
     format = function(x) paste0("$", format(x, big.mark = ","))
   )
+  revenue <- quote(
+    sales |>
+      filter(region == input$region) |>
+      filter(year >= 2023) |>
+      summarise(total = sum(revenue))
+  )
+  for (id in c(names(markers), names(hovers))) {
+    output[[id]] <- renderWhence(revenue, quoted = TRUE)
+  }
+  output$hover_untraced <- renderWhence(42)
+  output$hover_one <- renderWhence(sales |> summarise(total = sum(revenue)))
+  output$hover_update <- renderWhence(
+    sales |> filter(year >= input$plot_from) |> summarise(total = sum(revenue))
+  )
+  output$hover_rows <- renderWhenceTable(sales |> filter(revenue >= 700) |> count(customer))
+  output$hover_fallback <- renderWhenceTable(sales |> distinct(r = tolower(region)) |> count(r))
   output$customers <- renderWhence(
     sales |>
       filter(region == input$region) |>
@@ -62,9 +95,10 @@ server <- function(input, output, session) {
     format = list(total = function(x) paste0("$", format(x, big.mark = ","))),
     quoted = TRUE
   )
+  output$by_region_panel <- renderWhenceTable(by_region, quoted = TRUE)
   output$plot_region <- renderWhencePlot(
     sales |>
-      filter(year >= input$plot_from) |>
+      filter(year >= input$plot_from, region == "APAC" | year <= 2024) |>
       group_by(region) |>
       summarise(total = sum(revenue)),
     # A computed aesthetic, as for bars sorted by their height.

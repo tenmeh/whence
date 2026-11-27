@@ -5,7 +5,12 @@
 \alias{renderWhenceTable}
 \title{A summary table whose rows explain where they came from}
 \usage{
-whenceTableOutput(outputId, label = NULL)
+whenceTableOutput(
+  outputId,
+  label = NULL,
+  marker = getOption("whence.marker", "dotted"),
+  hover = getOption("whence.hover", "cut")
+)
 
 renderWhenceTable(
   expr,
@@ -21,6 +26,17 @@ renderWhenceTable(
 
 \item{label}{Text to show before the value, or \code{NULL} for none. The panel
 uses it in its heading too.}
+
+\item{marker}{The cue on a clickable value or table cell. One of
+\code{"dotted"}, \code{"dashed"}, \code{"highlight"}, \code{"mark"} (a small waterfall mark)
+or \code{"none"}. Defaults to option \code{whence.marker}, or \code{"dotted"} when unset.}
+
+\item{hover}{The preview to show on hover or keyboard focus. One of
+\code{"cut"} (the biggest cut), \code{"line"} (a one-line summary), \code{"waterfall"},
+\code{"panel"} (the full panel) or \code{"none"}. Defaults to option \code{whence.hover},
+or \code{"cut"} when unset. Tables and plots still replay the pipeline for
+preview counts with \code{hover = "none"} in the UI. Set
+\code{options(whence.hover = "none")} to skip the replay at render time.}
 
 \item{expr}{A pipeline that ends in a summary table.}
 
@@ -55,8 +71,8 @@ panel of the table as a whole.
 \details{
 \code{renderWhenceTable()} makes the table. Give it a pipeline that ends in a
 summary, as for \code{\link[=whence_table]{whence_table()}}. The table itself is sent with the render.
-The panel of a row needs one trip to the server, because it replays the
-steps for its group.
+The panel of a row needs one trip to the server. It reuses the replay of
+the steps when the render has already made one.
 
 The rows can be explained when the group columns of the last summary step
 are in the table. The table shows at most 500 rows.

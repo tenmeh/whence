@@ -127,7 +127,7 @@ whence_group <- function(table, ..., row = NULL) {
   }
   row <- as.integer(row)
 
-  replay <- replay_trace(table)
+  replay <- table$replay %||% replay_trace(table)
   structure(
     list(
       value = table$value[row, , drop = FALSE],
@@ -278,14 +278,12 @@ group_label <- function(table, row) {
 #' Why the counts of a group stop short, or the reason of the table
 #' @noRd
 group_reason <- function(table, replay) {
-  if (replay$ok) {
-    origin <- row_origin(table)
-    if (origin$step > 0L) {
-      return(paste0("Counts for this group are not known: ", origin$prefix_reason, "."))
-    }
+  reason <- row_count_reason(table, replay)
+  if (is.null(reason)) {
     return(table$reason)
   }
-  sub("^Row attribution unavailable", "Counts for this group are not known", replay$reason)
+  prefix <- if (!replay$ok && is.null(replay$why)) " past " else ": "
+  paste0("Counts for this group are not known", prefix, reason, ".")
 }
 
 

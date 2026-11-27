@@ -191,6 +191,48 @@ output$by_cyl_plot <- renderWhencePlot(
 )
 ```
 
+## Markers and hover
+
+Use `marker` to choose the cue on a value or on the first cell of a table
+row. The same cue applies to the table under a plot.
+
+| `marker` | What the viewer sees |
+| --- | --- |
+| `"dotted"` (default) | A dotted underline that turns solid on hover. |
+| `"dashed"` | A thicker dashed underline in the accent colour. |
+| `"highlight"` | A dotted underline with a pale accent background on hover. |
+| `"mark"` | A small waterfall mark after the value. |
+| `"none"` | No cue. The value still opens its panel. |
+
+Use `hover` to choose the preview for a value, table row or plot bar.
+Keyboard focus also opens previews for values and table rows. Press Escape
+to close a preview.
+
+| `hover` | What the viewer sees |
+| --- | --- |
+| `"cut"` (default) | The share of rows that make the result and the step that removed the most rows. |
+| `"line"` | The source count, the count that makes the result and the number of steps. |
+| `"waterfall"` | A small bar and a count for each step. |
+| `"panel"` | The full panel. Click the preview to keep the panel open. |
+| `"none"` | No preview. Click to open the panel. |
+
+Set `whence.marker` and `whence.hover` to give all outputs the same defaults.
+Each output call can override them.
+
+```{r, eval = FALSE}
+options(whence.marker = "dashed", whence.hover = "waterfall")
+whenceOutput("mean_mpg", marker = "highlight", hover = "line")
+```
+
+Tables and plots replay their steps at render time to get the counts for
+each row. An output with `hover = "none"` still runs that pass. Set
+`options(whence.hover = "none")` to skip it for all tables and plots.
+
+Set the CSS variable `--whence-accent` to change the accent colour. It uses
+the Bootstrap primary colour when available and violet otherwise. Set
+`--whence-underline-thickness` to change the dashed underline thickness.
+It defaults to `2px`.
+
 ## Follow the viewer
 
 `whence_opened()` gives a reactive with the panel that the viewer has open.

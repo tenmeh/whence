@@ -39,6 +39,15 @@
 #' @param outputId The output id.
 #' @param label Text to show before the value, or `NULL` for none. The panel
 #'   uses it in its heading too.
+#' @param marker The cue on a clickable value or table cell. One of
+#'   `"dotted"`, `"dashed"`, `"highlight"`, `"mark"` (a small waterfall mark)
+#'   or `"none"`. Defaults to option `whence.marker`, or `"dotted"` when unset.
+#' @param hover The preview to show on hover or keyboard focus. One of
+#'   `"cut"` (the biggest cut), `"line"` (a one-line summary), `"waterfall"`,
+#'   `"panel"` (the full panel) or `"none"`. Defaults to option `whence.hover`,
+#'   or `"cut"` when unset. Tables and plots still replay the pipeline for
+#'   preview counts with `hover = "none"` in the UI. Set
+#'   `options(whence.hover = "none")` to skip the replay at render time.
 #'
 #' @return `whenceOutput()` gives an HTML tag for the UI.
 #'   `renderWhence()` gives a render function for the server.
@@ -65,17 +74,23 @@
 #' }
 #' @export
 # The names follow the xOutput() and renderX() pattern of 'shiny'.
-whenceOutput <- function(outputId, label = NULL) { # nolint: object_name_linter.
+whenceOutput <- function(outputId, label = NULL, # nolint: object_name_linter.
+                         marker = getOption("whence.marker", "dotted"),
+                         hover = getOption("whence.hover", "cut")) {
   if (!is.character(outputId) || length(outputId) != 1 || !nzchar(outputId)) {
     stop("`outputId` must be a single string.", call. = FALSE)
   }
   check_string_or_null(label, "label")
+  check_choice(marker, "marker", marker_styles)
+  check_choice(hover, "hover", hover_styles)
 
   htmltools::attachDependencies(
     htmltools::tags$div(
       id = outputId,
       class = "whence-output",
       `data-label` = label,
+      `data-whence-marker` = marker,
+      `data-whence-hover` = hover,
       if (!is.null(label)) htmltools::tags$span(class = "whence-label", label),
       htmltools::tags$span(class = "whence-slot")
     ),

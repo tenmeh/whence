@@ -89,6 +89,19 @@ check_lazy <- function(lazy) {
 }
 
 
+marker_styles <- c("dotted", "dashed", "highlight", "mark", "none")
+hover_styles <- c("cut", "line", "waterfall", "panel", "none")
+
+check_choice <- function(x, arg, choices) {
+  if (!(is.character(x) && length(x) == 1L && !is.na(x) && x %in% choices)) {
+    quoted <- encodeString(choices, quote = '"')
+    valid <- paste(paste(utils::head(quoted, -1L), collapse = ", "), utils::tail(quoted, 1L), sep = " or ")
+    stop("`", arg, "` must be one of ", valid, ", not ", deparse_one(x), ".", call. = FALSE)
+  }
+  invisible(x)
+}
+
+
 #' Is `x` a grouped data frame?
 #'
 #' dplyr keeps the groups of a grouped or rowwise data frame in the

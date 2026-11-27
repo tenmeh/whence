@@ -16,6 +16,44 @@ test_that("whenceOutput() checks its arguments", {
   expect_error(whenceOutput("x", label = 1), "`label` must be")
 })
 
+test_that("marker and hover default to the options and reach the HTML", {
+  withr::local_options(whence.marker = NULL, whence.hover = NULL)
+  html <- as.character(whenceOutput("x"))
+  expect_match(html, 'data-whence-marker="dotted"', fixed = TRUE)
+  expect_match(html, 'data-whence-hover="cut"', fixed = TRUE)
+
+  withr::local_options(whence.marker = "dashed", whence.hover = "waterfall")
+  html <- as.character(whenceTableOutput("t"))
+  expect_match(html, 'data-whence-marker="dashed"', fixed = TRUE)
+  expect_match(html, 'data-whence-hover="waterfall"', fixed = TRUE)
+  expect_match(
+    as.character(whencePlotOutput("p", hover = "none")),
+    'data-whence-hover="none"',
+    fixed = TRUE
+  )
+})
+
+test_that("marker and hover are checked strictly", {
+  expect_error(
+    whenceOutput("x", hover = "cu"),
+    '`hover` must be one of "cut", "line", "waterfall", "panel" or "none", not "cu".',
+    fixed = TRUE
+  )
+  expect_error(whenceOutput("x", marker = "Dotted"), "`marker` must be one of", fixed = TRUE)
+  expect_error(whenceTableOutput("t", hover = NA), "`hover` must be one of", fixed = TRUE)
+  expect_error(whencePlotOutput("p", marker = c("dotted", "dashed")), "`marker` must be one of", fixed = TRUE)
+})
+
+test_that("a plot only has a debounced hover input when previews are enabled", {
+  html <- as.character(whencePlotOutput("p", hover = "cut"))
+  expect_match(html, 'data-hover-id="p_whence_hover"', fixed = TRUE)
+  expect_match(html, 'data-hover-delay="300"', fixed = TRUE)
+  expect_match(html, 'data-hover-delay-type="debounce"', fixed = TRUE)
+  html <- as.character(whencePlotOutput("p", hover = "none"))
+  expect_identical(grepl("data-hover-id", html, fixed = TRUE), FALSE)
+  expect_match(html, 'data-click-id="p_whence_click"', fixed = TRUE)
+})
+
 test_that("renderWhence() checks its arguments", {
   expect_error(renderWhence(1, format = "%.2f"), "`format` must be a function or `NULL`, not character")
   expect_error(renderWhence(1, env = list()), "`env` must be an environment, not list")
@@ -252,6 +290,316 @@ wait_for_output <- function(app, id) {
     timeout = 20000
   )
 }
+
+test_that("each marker style draws its own cue", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "markers")
+  style <- function(id, prop) {
+    js(app, sprintf("getComputedStyle(document.querySelector('#%s .whence-value')).%s", id, prop))
+  }
+  wait_for_output(app, "marker_none")
+  expect_match(style("revenue", "textDecorationStyle"), "dotted")
+  expect_match(style("marker_dashed", "textDecorationStyle"), "dashed")
+  expect_identical(js(app, "document.querySelectorAll('#marker_mark .whence-mark').length"), 1L)
+  expect_match(style("marker_none", "textDecorationLine"), "none")
+  expect_match(style("marker_highlight", "textDecorationStyle"), "dotted")
+  expect_identical(js(app, "document.querySelector('#marker_none .whence-value').tabIndex"), 0L)
+  expect_no_shiny_errors(app)
+})
+
+preview_open <- "document.querySelector('.whence-preview') !== null"
+
+preview_pointer <- function(app, selector, type = "pointerover", pointer = "mouse") {
+  app$run_js(sprintf(
+    "document.querySelector('%s').dispatchEvent(new PointerEvent('%s', {bubbles: true, pointerType: '%s'}))",
+    selector, type, pointer
+  ))
+}
+
+preview_text <- function(app) {
+  js(app, "document.querySelector('.whence-preview').textContent")
+}
+
+test_that("the default hover shows the biggest cut and closes on Escape and leave", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-cut")
+  wait_for_output(app, "revenue")
+  trigger <- "#revenue .whence-value"
+  preview_pointer(app, trigger)
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "6 of 20 rows (30%) make this value.", fixed = TRUE)
+  expect_match(preview_text(app), 'Biggest cut: region == "APAC"', fixed = TRUE)
+  expect_match(preview_text(app), "\u221210 rows (50%)", fixed = TRUE)
+  expect_match(preview_text(app), "Click to see every step$")
+  expect_identical(js(app, "document.querySelector('.whence-preview').getAttribute('role')"), "tooltip")
+  expect_identical(js(app, paste(
+    "document.querySelector('#revenue .whence-value').getAttribute('aria-describedby')",
+    "=== document.querySelector('.whence-preview').id"
+  )), TRUE)
+  app$run_js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
+  app$wait_for_js(paste0("!(", preview_open, ")"))
+  expect_identical(
+    js(app, "document.querySelector('#revenue .whence-value').getAttribute('aria-describedby')"),
+    "revenue-whence-hint"
+  )
+
+  preview_pointer(app, trigger)
+  app$wait_for_js(preview_open)
+  preview_pointer(app, trigger, "pointerout")
+  app$wait_for_js(paste0("!(", preview_open, ")"))
+  app$run_js("document.querySelector('#revenue .whence-value').focus()")
+  app$wait_for_js(preview_open, timeout = 1000)
+  app$run_js("document.querySelector('#revenue .whence-value').blur()")
+  expect_identical(js(app, preview_open), FALSE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("line hover gives a one-line summary on keyboard focus", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-line")
+  wait_for_output(app, "hover_line")
+  preview_pointer(app, "#hover_line .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "From 20 rows of sales to 6, in 3 steps.", fixed = TRUE)
+  preview_pointer(app, "#hover_line .whence-value", "pointerout")
+  app$wait_for_js(paste0("!(", preview_open, ")"))
+  app$run_js("document.querySelector('#hover_line .whence-value').focus()")
+  app$wait_for_js(preview_open, timeout = 1000)
+  expect_match(preview_text(app), "From 20 rows of sales to 6, in 3 steps.", fixed = TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("waterfall hover draws one scaled bar per shown step", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-waterfall")
+  wait_for_output(app, "hover_waterfall")
+  preview_pointer(app, "#hover_waterfall .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_identical(js(app, "document.querySelectorAll('.whence-preview-bar').length"), 4L)
+  expect_identical(js(app, paste(
+    "Array.from(document.querySelectorAll('.whence-preview-bar'))",
+    ".map(function(bar) { return bar.style.width; })"
+  )), list("100%", "50%", "30%", "5%"))
+  preview_pointer(app, "#hover_waterfall .whence-value", "pointerout")
+  app$wait_for_js(paste0("!(", preview_open, ")"))
+  app$run_js("document.querySelector('#hover_waterfall .whence-value').focus()")
+  app$wait_for_js(preview_open, timeout = 1000)
+  expect_identical(js(app, "document.querySelectorAll('.whence-preview-bar').length"), 4L)
+  expect_no_shiny_errors(app)
+})
+
+test_that("hover none gives no preview on pointer entry or focus", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-none")
+  wait_for_output(app, "hover_none")
+  preview_pointer(app, "#hover_none .whence-value")
+  Sys.sleep(0.45)
+  expect_identical(js(app, preview_open), FALSE)
+  app$run_js("document.querySelector('#hover_none .whence-value').focus()")
+  expect_identical(js(app, preview_open), FALSE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a table row preview uses the counts of its group without a request", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-table")
+  wait_for_output(app, "by_region")
+  preview_pointer(app, "#by_region tbody tr:first-child .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "6 of 10 rows (60%) make this row.", fixed = TRUE)
+  expect_match(preview_text(app), "Biggest cut: year >= 2023", fixed = TRUE)
+  expect_match(preview_text(app), "\u22124 rows (40%)", fixed = TRUE)
+  expect_null(app$get_value(input = ".whence_request"))
+  expect_no_shiny_errors(app)
+})
+
+test_that("a table row without a count grid shows the table counts and the reason", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-table-fallback")
+  wait_for_output(app, "hover_fallback")
+  preview_pointer(app, "#hover_fallback tbody tr:first-child .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "2 of 20 rows (10%) make this table.", fixed = TRUE)
+  expect_match(preview_text(app), "Counts for this row are not known: the replay stops at distinct().", fixed = TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("fast moves along three rows leave just the last row preview", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-fast-rows")
+  wait_for_output(app, "hover_rows")
+  preview_pointer(app, "#hover_rows tbody tr:nth-child(1) .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "3 of 5 rows (60%)", fixed = TRUE)
+  app$run_js("
+    Array.from(document.querySelectorAll('#hover_rows tbody .whence-value')).slice(0, 3)
+      .forEach(function(trigger, i) {
+        var options = {bubbles: true, pointerType: 'mouse'};
+        if (i !== 0) trigger.dispatchEvent(new PointerEvent('pointerover', options));
+        if (i !== 2) trigger.dispatchEvent(new PointerEvent('pointerout', options));
+      });
+  ")
+  app$wait_for_js("Array.from(document.querySelectorAll('.whence-preview')).some(function(node) {
+    return node.textContent.indexOf('4 of 5 rows (80%)') >= 0;
+  })")
+  expect_identical(js(app, "document.querySelectorAll('.whence-preview').length"), 1L)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a re-render closes the preview and the next hover shows the new counts", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-rerender")
+  wait_for_output(app, "hover_update")
+  trigger <- "#hover_update .whence-value"
+  preview_pointer(app, trigger)
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "12 of 20 rows (60%)", fixed = TRUE)
+  app$set_inputs(plot_from = 2022)
+  app$wait_for_js(paste0("!(", preview_open, ")"))
+  preview_pointer(app, trigger)
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "16 of 20 rows (80%)", fixed = TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("removeUI closes the preview with its output", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-remove-ui")
+  wait_for_output(app, "joined")
+  preview_pointer(app, "#joined .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  app$run_js("document.querySelector('#drop').click()")
+  app$wait_for_js("document.getElementById('joined') === null")
+  expect_identical(js(app, preview_open), FALSE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("the preview of an untraced value gives the trace reason", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-untraced")
+  wait_for_output(app, "hover_untraced")
+  preview_pointer(app, "#hover_untraced .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "Not traced: the pipeline has no step that whence knows.", fixed = TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("the preview of a single aggregation says no step removed rows", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-one-step")
+  wait_for_output(app, "hover_one")
+  preview_pointer(app, "#hover_one .whence-value")
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_match(preview_text(app), "20 of 20 rows (100%) make this value.", fixed = TRUE)
+  expect_match(preview_text(app), "No step removed rows.", fixed = TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a narrow screen gives no hover or focus preview", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-narrow", width = 375, height = 800)
+  wait_for_output(app, "revenue")
+  preview_pointer(app, "#revenue .whence-value")
+  app$run_js("document.querySelector('#revenue .whence-value').focus()")
+  Sys.sleep(0.45)
+  expect_identical(js(app, preview_open), FALSE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a touch pointer gives no preview", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-touch")
+  wait_for_output(app, "revenue")
+  preview_pointer(app, "#revenue .whence-value", pointer = "touch")
+  preview_pointer(app, "#revenue .whence-value", "pointerdown", pointer = "touch")
+  app$run_js("document.querySelector('#revenue .whence-value').focus()")
+  Sys.sleep(0.45)
+  expect_identical(js(app, preview_open), FALSE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("the panel hover can be entered, and a click pins it", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-panel")
+  wait_for_output(app, "hover_panel")
+  trigger <- "#hover_panel .whence-value"
+  preview_pointer(app, trigger)
+  app$wait_for_js("document.querySelector('.whence-preview .whence-summary') !== null", timeout = 3000)
+  expect_identical(js(app, "document.querySelector('.whence-backdrop') === null"), TRUE)
+  expect_identical(js(app, "document.querySelector('.whence-preview').getAttribute('role')"), "dialog")
+  expect_null(js(app, "document.querySelector('.whence-preview').getAttribute('aria-modal')"))
+  preview_pointer(app, ".whence-preview")
+  preview_pointer(app, trigger, "pointerout")
+  Sys.sleep(0.4)
+  expect_identical(js(app, preview_open), TRUE)
+  app$run_js("document.querySelector('#hover_panel .whence-value').click()")
+  app$wait_for_js(paste(panel_open, "&& !(", preview_open, ")"))
+  expect_no_shiny_errors(app)
+})
+
+test_that("a panel preview opens on keyboard focus and lets focus leave", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-panel-focus")
+  wait_for_output(app, "hover_panel")
+  app$run_js("document.querySelector('#hover_panel .whence-value').focus()")
+  app$wait_for_js(preview_open, timeout = 1000)
+  expect_identical(js(app, "document.activeElement.matches('#hover_panel .whence-value')"), TRUE)
+  press(app, "Tab", keycode = 9)
+  expect_identical(js(app, "document.activeElement.matches('#hover_untraced .whence-value')"), TRUE)
+  expect_identical(js(app, "document.querySelector('.whence-preview[role=dialog]') === null"), TRUE)
+  expect_identical(js(app, "document.querySelector('.whence-backdrop') === null"), TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a table panel hover shows Loading and uses the cached reply next time", {
+  skip_on_cran()
+  local_dplyr()
+  app <- local_app_driver(app_path(), name = "hover-panel-table")
+  wait_for_output(app, "by_region_panel")
+  trigger <- "#by_region_panel tbody tr:first-child .whence-value"
+  app$run_js("
+    window.hoverRequests = [];
+    $(document).on('shiny:inputchanged', function(event) {
+      if (event.name === '.whence_request' && event.value.action === 'group') {
+        var loading = document.querySelector('.whence-preview .whence-loading');
+        window.hoverRequests.push(loading && loading.textContent);
+      }
+    });
+  ")
+  first_summary <- "document.querySelector('.whence-preview .whence-summary')"
+  for (i in 1:2) {
+    preview_pointer(app, trigger)
+    app$wait_for_js(paste(first_summary, "!== null"), timeout = 3000)
+    expect_identical(js(app, paste0(first_summary, ".textContent")), "region = APAC")
+    if (i == 1) {
+      preview_pointer(app, trigger, "pointerout")
+      app$wait_for_js(paste0("!(", preview_open, ")"))
+    }
+  }
+  expect_identical(js(app, "window.hoverRequests"), list("Loading..."))
+  app$run_js("document.querySelector('.whence-preview .whence-summary').click()")
+  app$wait_for_js(panel_open)
+  expect_identical(js(app, "document.querySelector('.whence-panel .whence-summary').textContent"), "region = APAC")
+  expect_identical(js(app, "window.hoverRequests"), list("Loading..."))
+  expect_identical(js(app, preview_open), FALSE)
+  expect_no_shiny_errors(app)
+})
 
 test_that("a click opens the panel with no trip to the server", {
   skip_on_cran()
@@ -587,6 +935,40 @@ test_that("a plot that renders again closes its open panel", {
   app$wait_for_js("document.querySelector('.whence-panel') === null", timeout = 10000)
 
   expect_identical(js(app, "document.querySelector('.whence-backdrop') === null"), TRUE)
+  expect_no_shiny_errors(app)
+})
+
+test_that("a plot hover shows the count grid of its bar and closes on NULL", {
+  skip_on_cran()
+  local_dplyr()
+  skip_if_not_installed("ggplot2")
+  app <- local_app_driver(app_path(), name = "plot-hover")
+  app$wait_for_js("document.querySelector('#plot_region img') !== null", timeout = 20000)
+  app$wait_for_js("document.querySelector('#plot_region-whence-table tbody tr') !== null", timeout = 20000)
+  app$run_js("document.querySelector('#plot_region').scrollIntoView({block: 'center'})")
+
+  hover <- list(
+    x = 1, y = 1000, coords_css = list(x = 132, y = 225),
+    mapping = list(x = "reorder(region, total)", y = "total"),
+    domain = list(discrete_limits = list(x = list("APAC", "EMEA")))
+  )
+  counts <- paste(
+    "Array.from(document.querySelectorAll('.whence-preview-step span:last-child'))",
+    ".map(function(count) { return count.textContent; })"
+  )
+  app$set_inputs(plot_region_whence_hover = hover, allow_no_input_binding_ = TRUE, wait_ = FALSE)
+  app$wait_for_js(preview_open, timeout = 3000)
+  expect_identical(js(app, counts), list("10", "6", "6", "1"))
+  expect_identical(app$get_value(input = ".whence_request")$action, "hover")
+
+  hover$x <- 2
+  hover$coords_css$x <- 265
+  app$set_inputs(plot_region_whence_hover = hover, allow_no_input_binding_ = TRUE, wait_ = FALSE)
+  app$wait_for_js(paste0("(", counts, ").join('/') === '10/4/4/1'"), timeout = 3000)
+  expect_identical(js(app, counts), list("10", "4", "4", "1"))
+
+  app$set_inputs(plot_region_whence_hover = NULL, allow_no_input_binding_ = TRUE, wait_ = FALSE)
+  app$wait_for_js(paste0("!(", preview_open, ")"))
   expect_no_shiny_errors(app)
 })
 

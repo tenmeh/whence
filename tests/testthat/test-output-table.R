@@ -58,6 +58,23 @@ test_that("a group request sends the panel of that row", {
   expect_identical(ls(session$userData$.whence_groups), "tab\0372")
 })
 
+test_that("group replies carry the preview token on success and after removal", {
+  local_dplyr()
+  traces <- list2env(list(tab = region_table()))
+  session <- fake_table_session()
+  request <- list(id = "tab", action = "group", row = 2, preview = "1")
+
+  handle_request(session, traces, request)
+  handle_request(session, traces, list(id = "tab", action = "gone"))
+  handle_request(session, traces, request)
+
+  replies <- lapply(session$sent(), function(sent) sent$message)
+  expect_identical(lapply(replies, function(reply) reply[c("row", "ok", "preview")]), list(
+    list(row = 2L, ok = TRUE, preview = "1"),
+    list(row = 2L, ok = FALSE, preview = "1")
+  ))
+})
+
 test_that("a removed request sends the rows that a step removed", {
   local_dplyr()
   traces <- list2env(list(tab = region_table()))
@@ -126,6 +143,34 @@ test_that("a point request with a click off the bars says so", {
   sent <- session$sent()
   expect_identical(sent[[1]]$message$message, "Click on a bar or a point of the plot.")
   expect_identical(sent[[2]]$message$panel$value, "region = APAC")
+})
+
+test_that("a hover request answers with the row under the pointer, never evaluating its text", {
+  local_dplyr()
+  trace <- region_table()
+  trace$plot_values <- list(x = trace$value$region, y = trace$value$total)
+  traces <- list2env(list(by_channel = trace))
+  session <- fake_table_session()
+  click <- list(
+    x = 2, y = 100, mapping = list(x = "region", y = "total"),
+    domain = list(discrete_limits = list(x = list("APAC", "EMEA")))
+  )
+  request <- list(id = "by_channel", action = "hover", click = click)
+
+  handle_request(session, traces, request)
+  request$click$mapping$x <- "stop('evaluated')"
+  expect_no_error(handle_request(session, traces, request))
+  request$click$x <- 5
+  handle_request(session, traces, request)
+
+  sent <- session$sent()
+  expect_identical(lapply(sent, function(reply) reply$type), rep(list("whence:hover"), 3))
+  expect_identical(lapply(sent, function(reply) reply$message), list(
+    list(id = "by_channel", row = 2L),
+    list(id = "by_channel", row = 2L),
+    list(id = "by_channel", row = NULL)
+  ))
+  expect_length(ls(session$userData$.whence_groups), 0)
 })
 
 test_that("a new render forgets the panels of the rows of the old table", {
