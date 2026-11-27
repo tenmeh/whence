@@ -39,7 +39,9 @@ jobs:
           # installed, so this job checks without them. 'ggplot2' 4.0 needs
           # 'S7', which needs R >= 4.2, so this job uses 'ggplot2' 3.5.2, the
           # last release before 4.0. The plot tests then still run on R 4.1.
-          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore, ggplot2@3.5.2'}
+          # A package named here gets its Suggests too, and 'Hmisc' (in the
+          # Suggests of 'ggplot2') needs R >= 4.2. whence does not use it.
+          - {os: ubuntu-latest,  r: '4.1', ignore: 'arrow=?ignore, duckplyr=?ignore, Hmisc=?ignore, ggplot2@3.5.2'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
